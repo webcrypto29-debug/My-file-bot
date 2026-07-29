@@ -4,53 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Watch Ad to Unlock File</title>
+    
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- आपका Ad Provider Script Header (अगर कोई सप्लाइड स्क्रिप्ट टैग है तो यहाँ डालें) -->
+    <!-- Ad Provider Script (Monetag/Adsterra SDK) -->
+    <script src='//libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
+
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 30px 15px;
+            margin: 0;
+        }
+        .card {
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .btn {
+            background-color: #0088cc;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 15px;
+            transition: 0.3s;
+        }
+        .btn:hover {
+            background-color: #006699;
+        }
+        p {
+            color: #b0b0b0;
+            font-size: 14px;
+        }
+    </style>
 </head>
-<body style="background-color: #121212; color: #ffffff; text-align: center; font-family: Arial, sans-serif; padding: 20px;">
+<body>
 
-    <h2>🎬 Watch Ad to Unlock</h2>
-    <p id="status">Loading ad, please wait...</p>
+    <div class="card">
+        <h2>🎬 Watch Ad & Claim</h2>
+        <p id="status">Click the button below to watch a short video ad and unlock your file.</p>
 
-    <button id="adBtn" onclick="watchAd()" style="background-color: #0088cc; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; display: none;">
-        Watch Ad Now 🚀
-    </button>
+        <button id="adBtn" class="btn" onclick="watchAd()">Watch Ad Now 🚀</button>
+    </div>
 
     <script>
+        // Telegram WebApp Initialize
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        // Ad Script Load Check
-        window.onload = function() {
-            if (typeof show_11452552 === 'function') {
-                document.getElementById('status').innerText = "Click below to watch the ad and receive your reward!";
-                document.getElementById('adBtn').style.display = 'inline-block';
-            } else {
-                document.getElementById('status').innerText = "Ad network loading... Click below if ready.";
-                document.getElementById('adBtn').style.display = 'inline-block';
-            }
-        };
-
         function watchAd() {
-            document.getElementById('status').innerText = "Playing ad...";
-            
+            const statusTxt = document.getElementById('status');
+            const btn = document.getElementById('adBtn');
+
+            statusTxt.innerText = "Playing ad... Please wait.";
+            btn.style.display = 'none';
+
+            // Ad Script Trigger
             if (typeof show_11452552 === 'function') {
-                // आपका Ad Code
                 show_11452552().then(() => {
-                    // एड पूरा देखने के बाद Reward Trigger
-                    document.getElementById('status').innerText = "✅ Ad Watched! Sending reward...";
+                    statusTxt.innerText = "✅ Ad Watched! Unlocking your file...";
                     
-                    // Telegram Bot को सिग्नल भेजना
-                    tg.sendData("ad_completed");
-                    tg.close();
+                    // Send signal back to Telegram Bot
+                    setTimeout(() => {
+                        tg.sendData("ad_completed");
+                        tg.close();
+                    }, 1000);
+
                 }).catch((err) => {
-                    alert("Ad failed to play or was closed early. Please try again.");
-                    document.getElementById('status').innerText = "Error playing ad. Try again.";
+                    alert("Ad was skipped or failed to play. Please try again!");
+                    statusTxt.innerText = "❌ Verification failed. Click below to try again.";
+                    btn.style.display = 'block';
                 });
             } else {
-                alert("Ad script not loaded properly. Check your connection.");
+                alert("Ad script is still loading or blocked by AdBlocker. Please try again in 5 seconds.");
+                statusTxt.innerText = "⚠️ Ad Network not ready.";
+                btn.style.display = 'block';
             }
         }
     </script>
