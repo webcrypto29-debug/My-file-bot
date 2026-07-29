@@ -8,7 +8,7 @@
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- Ad Provider Script (https mandatory) -->
+    <!-- Ad Provider Script -->
     <script src='https://libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
 
     <style>
@@ -40,17 +40,13 @@
             width: 100%;
             margin-top: 15px;
         }
-        p {
-            color: #b0b0b0;
-            font-size: 14px;
-        }
     </style>
 </head>
 <body>
 
     <div class="card">
         <h2>🎬 Watch Ad & Claim</h2>
-        <p id="status">Click below to watch the ad and get your file.</p>
+        <p id="status">Click below to watch the ad and get 3 Credits.</p>
 
         <button id="adBtn" class="btn" onclick="watchAd()">Watch Ad Now 🚀</button>
     </div>
@@ -63,28 +59,34 @@
             const statusTxt = document.getElementById('status');
             const btn = document.getElementById('adBtn');
 
-            statusTxt.innerText = "Processing... Please wait.";
+            statusTxt.innerText = "Playing ad... Please wait.";
+            btn.style.display = 'none';
 
-            // 1. Try playing the Rewarded Ad
+            function complete() {
+                statusTxt.innerText = "✅ Ad Watched! Sending data...";
+                try {
+                    // Method 1: Send Data to Bot
+                    tg.sendData("ad_completed");
+                } catch (e) {}
+
+                // Method 2: Close Mini App after 1 second
+                setTimeout(() => {
+                    tg.close();
+                }, 1000);
+            }
+
+            // Try playing Ad
             if (typeof window.show_11452552 === 'function') {
                 window.show_11452552().then(() => {
-                    claimFile();
+                    complete();
                 }).catch((err) => {
-                    // Ad failed, fallback to claim
-                    claimFile();
+                    // Ad missed/failed fallback
+                    complete();
                 });
             } else {
-                // 2. If Ad script blocked by AdBlocker/DNS, directly allow claiming
-                claimFile();
+                // Script fail fallback
+                complete();
             }
-        }
-
-        function claimFile() {
-            document.getElementById('status').innerText = "✅ Verified! Unlocking file...";
-            setTimeout(() => {
-                tg.sendData("ad_completed");
-                tg.close();
-            }, 800);
         }
     </script>
 </body>
