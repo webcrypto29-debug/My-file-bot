@@ -1,0 +1,60 @@
+cat << 'EOF' > index.html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watch Ad to Unlock File</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src='//ks.monetag.com/script.js?zoneid=YOUR_MONETAG_ZONE_ID'></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .btn {
+      background-color: #0088cc;
+      color: white;
+      padding: 15px 25px;
+      font-size: 18px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>फाइल पाने के लिए एड देखें</h2>
+  <button class="btn" onclick="startAd()">Watch Ad & Unlock 📁</button>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    function startAd() {
+      if (typeof show_YOUR_MONETAG_ZONE_ID === 'function') {
+        show_YOUR_MONETAG_ZONE_ID().then(() => {
+          tg.sendData("ad_completed");
+          tg.close();
+        }).catch(err => {
+          alert("कृपया फाइल अनलॉक करने के लिए पूरा एड देखें!");
+        });
+      } else {
+        alert("Ad लोड हो रहा है, कृपया 2 सेकंड बाद दोबारा ट्राई करें!");
+      }
+    }
+  </script>
+</body>
+</html>
+EOF
+
