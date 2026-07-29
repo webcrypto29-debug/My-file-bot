@@ -72,19 +72,18 @@
 <body>
 
     <div class="container">
-        <h2>📁 Unlock Your File</h2>
-        <p>Click below to watch the rewarded ad. After watching the complete ad, your file will be unlocked instantly!</p>
+        <h2>📁 Unlock Your Content</h2>
+        <p>Watch the ad completely, then click the close (X) button to receive your +3 Credits and unlock your file instantly!</p>
         
-        <button class="btn" id="watchBtn" onclick="startAd()">Watch Ad Now 🚀</button>
-        <div class="loading" id="loadingText">Loading Ad, please wait...</div>
+        <button class="btn" id="watchBtn" onclick="startAdProcess()">Watch Ad Now 🚀</button>
+        <div class="loading" id="loadingText">Loading Ad... Please watch and close it when done.</div>
     </div>
 
     <script>
-        // Telegram WebApp Initialize
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        function startAd() {
+        function startAdProcess() {
             const btn = document.getElementById('watchBtn');
             const loadingText = document.getElementById('loadingText');
             
@@ -92,29 +91,22 @@
             btn.style.pointerEvents = 'none';
             loadingText.style.display = 'block';
 
-            // Check if the ad function exists and trigger it
+            let verified = false;
+
             if (typeof show_11452552 === 'function') {
                 show_11452552().then(() => {
-                    // Ad watched successfully, redirect to bot to give reward
+                    verified = true;
                     redirectToBot();
                 }).catch((error) => {
-                    console.log("Ad error or closed:", error);
-                    // Fallback to ensure user isn't stuck if ad fails to render
+                    console.log("Ad closed or error:", error);
                     redirectToBot();
                 });
             } else {
-                // Fallback if SDK takes a moment to load
                 setTimeout(() => {
-                    if (typeof show_11452552 === 'function') {
-                        show_11452552().then(() => {
-                            redirectToBot();
-                        }).catch(() => {
-                            redirectToBot();
-                        });
-                    } else {
+                    if (!verified) {
                         redirectToBot();
                     }
-                }, 2000);
+                }, 3000);
             }
         }
 
