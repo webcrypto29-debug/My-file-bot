@@ -8,8 +8,8 @@
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- Ad Provider Script (Monetag/Adsterra SDK) -->
-    <script src='//libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
+    <!-- Ad Provider Script (https mandatory hai) -->
+    <script src='https://libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
 
     <style>
         body {
@@ -39,10 +39,6 @@
             cursor: pointer;
             width: 100%;
             margin-top: 15px;
-            transition: 0.3s;
-        }
-        .btn:hover {
-            background-color: #006699;
         }
         p {
             color: #b0b0b0;
@@ -54,13 +50,12 @@
 
     <div class="card">
         <h2>🎬 Watch Ad & Claim</h2>
-        <p id="status">Click the button below to watch a short video ad and unlock your file.</p>
+        <p id="status">Click the button below to watch a short ad and unlock your file.</p>
 
         <button id="adBtn" class="btn" onclick="watchAd()">Watch Ad Now 🚀</button>
     </div>
 
     <script>
-        // Telegram WebApp Initialize
         const tg = window.Telegram.WebApp;
         tg.expand();
 
@@ -69,28 +64,25 @@
             const btn = document.getElementById('adBtn');
 
             statusTxt.innerText = "Playing ad... Please wait.";
-            btn.style.display = 'none';
 
-            // Ad Script Trigger
-            if (typeof show_11452552 === 'function') {
-                show_11452552().then(() => {
+            // Check if SDK function exists in window
+            if (typeof window.show_11452552 === 'function') {
+                window.show_11452552().then(() => {
                     statusTxt.innerText = "✅ Ad Watched! Unlocking your file...";
                     
-                    // Send signal back to Telegram Bot
                     setTimeout(() => {
                         tg.sendData("ad_completed");
                         tg.close();
                     }, 1000);
 
                 }).catch((err) => {
-                    alert("Ad was skipped or failed to play. Please try again!");
-                    statusTxt.innerText = "❌ Verification failed. Click below to try again.";
-                    btn.style.display = 'block';
+                    alert("Ad was skipped or failed to play. Try again.");
+                    statusTxt.innerText = "❌ Ad skipped. Please try again.";
                 });
             } else {
-                alert("Ad script is still loading or blocked by AdBlocker. Please try again in 5 seconds.");
-                statusTxt.innerText = "⚠️ Ad Network not ready.";
-                btn.style.display = 'block';
+                // If script is taking time, try again after 2 seconds
+                alert("Ad network is loading... Please click OK and press Watch Ad again in 3 seconds.");
+                statusTxt.innerText = "⚠️ Retry clicking button in 3 seconds.";
             }
         }
     </script>
