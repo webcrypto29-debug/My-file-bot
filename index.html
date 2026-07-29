@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch Ad & Unlock Content</title>
+    <title>Watch Ad & Unlock File</title>
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
@@ -65,7 +65,7 @@
             margin-top: 15px;
             font-size: 13px;
             color: #38bdf8;
-            display: block;
+            display: none;
         }
     </style>
 </head>
@@ -73,43 +73,40 @@
 
     <div class="container">
         <h2>📁 Unlock Your Content</h2>
-        <p>Click below to watch the ad. Complete the ad and close it to instantly receive +3 Credits and unlock your file!</p>
+        <p>Watch the ad completely, then click the close (X) button to receive your +3 Credits and unlock your file instantly!</p>
         
-        <button class="btn" id="watchBtn" onclick="triggerAd()">Watch Ad Now 🚀</button>
-        <div class="loading" id="loadingText">Ready to load ad...</div>
+        <button class="btn" id="watchBtn" onclick="startAdProcess()">Watch Ad Now 🚀</button>
+        <div class="loading" id="loadingText">Loading Ad... Please watch and close it when done.</div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        function triggerAd() {
+        function startAdProcess() {
             const btn = document.getElementById('watchBtn');
             const loadingText = document.getElementById('loadingText');
             
             btn.style.opacity = '0.6';
             btn.style.pointerEvents = 'none';
-            loadingText.innerText = "Opening Ad, please wait...";
+            loadingText.style.display = 'block';
 
-            let adDone = false;
+            let verified = false;
 
-            // Check if Monetag SDK function exists
             if (typeof show_11452552 === 'function') {
                 show_11452552().then(() => {
-                    adDone = true;
+                    verified = true;
                     redirectToBot();
-                }).catch((err) => {
-                    console.log("Ad error/closed:", err);
+                }).catch((error) => {
+                    console.log("Ad closed or error:", error);
                     redirectToBot();
                 });
             } else {
-                // If SDK script is blocked or takes time inside Telegram WebView
-                loadingText.innerText = "Redirecting for verification...";
                 setTimeout(() => {
-                    if (!adDone) {
+                    if (!verified) {
                         redirectToBot();
                     }
-                }, 2000);
+                }, 3000);
             }
         }
 
