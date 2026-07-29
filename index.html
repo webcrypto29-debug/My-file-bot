@@ -1,62 +1,58 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Watch Ad to Unlock File</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <!-- Replace YOUR_MONETAG_ZONE_ID with your actual Zone ID -->
-  <script src='//ks.monetag.com/script.js?zoneid=YOUR_MONETAG_ZONE_ID'></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Ad to Unlock File</title>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <style>
-    body { 
-      font-family: Arial, sans-serif; 
-      background-color: #121212; 
-      color: #ffffff; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      justify-content: center; 
-      height: 100vh; 
-      margin: 0; 
-    }
-    h2 {
-      margin-bottom: 20px;
-      font-size: 20px;
-    }
-    .btn { 
-      background-color: #0088cc; 
-      color: white; 
-      padding: 15px 25px; 
-      font-size: 18px; 
-      border: none; 
-      border-radius: 10px; 
-      cursor: pointer; 
-      font-weight: bold; 
-    }
-  </style>
+    <!-- आपका Ad Provider Script Header (अगर कोई सप्लाइड स्क्रिप्ट टैग है तो यहाँ डालें) -->
 </head>
-<body>
+<body style="background-color: #121212; color: #ffffff; text-align: center; font-family: Arial, sans-serif; padding: 20px;">
 
-  <h2>Watch an ad to unlock your file</h2>
-  <button class="btn" onclick="startAd()">Watch Ad & Unlock 📁</button>
+    <h2>🎬 Watch Ad to Unlock</h2>
+    <p id="status">Loading ad, please wait...</p>
 
-  <script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+    <button id="adBtn" onclick="watchAd()" style="background-color: #0088cc; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; display: none;">
+        Watch Ad Now 🚀
+    </button>
 
-    function startAd() {
-      if (typeof show_YOUR_MONETAG_ZONE_ID === 'function') {
-        show_YOUR_MONETAG_ZONE_ID().then(() => {
-          tg.sendData("ad_completed");
-          tg.close();
-        }).catch(err => {
-          alert("Please watch the complete ad to unlock the file!");
-        });
-      } else {
-        alert("Ad is loading, please try again in a few seconds!");
-      }
-    }
-  </script>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        // Ad Script Load Check
+        window.onload = function() {
+            if (typeof show_11452552 === 'function') {
+                document.getElementById('status').innerText = "Click below to watch the ad and receive your reward!";
+                document.getElementById('adBtn').style.display = 'inline-block';
+            } else {
+                document.getElementById('status').innerText = "Ad network loading... Click below if ready.";
+                document.getElementById('adBtn').style.display = 'inline-block';
+            }
+        };
+
+        function watchAd() {
+            document.getElementById('status').innerText = "Playing ad...";
+            
+            if (typeof show_11452552 === 'function') {
+                // आपका Ad Code
+                show_11452552().then(() => {
+                    // एड पूरा देखने के बाद Reward Trigger
+                    document.getElementById('status').innerText = "✅ Ad Watched! Sending reward...";
+                    
+                    // Telegram Bot को सिग्नल भेजना
+                    tg.sendData("ad_completed");
+                    tg.close();
+                }).catch((err) => {
+                    alert("Ad failed to play or was closed early. Please try again.");
+                    document.getElementById('status').innerText = "Error playing ad. Try again.";
+                });
+            } else {
+                alert("Ad script not loaded properly. Check your connection.");
+            }
+        }
+    </script>
 </body>
 </html>
