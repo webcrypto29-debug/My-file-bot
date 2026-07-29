@@ -108,7 +108,7 @@
                     timerBox.style.display = 'none';
                     timerFinished = true;
                     verifyBtn.style.display = 'block';
-                    linkBtn.style.display = 'none'; // Ad button hata do taaki dubara click na ho
+                    linkBtn.style.display = 'none';
                 }
             }, 1000);
         }
@@ -121,11 +121,15 @@
 
             const verifyBtn = document.getElementById('verifyBtn');
             verifyBtn.style.pointerEvents = 'none';
-            verifyBtn.style.opacity = '0.5';
-            verifyBtn.innerText = "Redirecting to Bot...";
+            verifyBtn.style.opacity = '0.8';
+            
+            // Ye raha naya message jo user ko button par dikhega
+            verifyBtn.innerText = "✅ File & Credits Sent! Check Telegram Bot...";
 
-            // Seedha bot par bhej do verify karne ke liye
-            window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
+            // Thoda sa gap dekar bot par redirect kar do taaki message clearly dikh jaye
+            setTimeout(() => {
+                window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
+            }, 800);
         }
     </script>
 </body>
