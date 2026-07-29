@@ -3,16 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unlock Content - Timer Verification</title>
-    <!-- Telegram Web App SDK -->
+    <title>Unlock Content - Secure Timer</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         body {
             background-color: #0f172a;
@@ -32,17 +30,8 @@
             max-width: 400px;
             width: 100%;
         }
-        h2 {
-            margin-bottom: 12px;
-            font-size: 22px;
-            color: #f8fafc;
-        }
-        p {
-            color: #94a3b8;
-            font-size: 14px;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
+        h2 { margin-bottom: 12px; font-size: 22px; color: #f8fafc; }
+        p { color: #94a3b8; font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
         .btn {
             background-color: #3b82f6;
             color: white;
@@ -53,13 +42,11 @@
             border-radius: 10px;
             cursor: pointer;
             width: 100%;
-            transition: background 0.2s;
             text-decoration: none;
             display: inline-block;
+            transition: 0.2s;
         }
-        .btn:active {
-            background-color: #2563eb;
-        }
+        .btn:disabled { background-color: #475569; cursor: not-allowed; opacity: 0.6; }
         .timer-box {
             margin-top: 15px;
             font-size: 15px;
@@ -73,12 +60,12 @@
 
     <div class="container">
         <h2>⏱️ Complete Task to Unlock</h2>
-        <p>Click the link below, stay on the opened page for 15 seconds, and then come back to get your file and +3 Credits!</p>
+        <p>Click the link below, wait for 15 seconds on the opened page, and then click verify to get your credits!</p>
         
-        <!-- Direct Link with 15s Timer -->
+        <!-- Direct Link -->
         <a href="https://omg10.com/4/11203254" target="_blank" class="btn" id="adLinkBtn" onclick="startTimer()">1. Click & Visit Ad Link 🚀</a>
         
-        <div class="timer-box" id="timerBox">⏳ Please wait on the ad page... <span id="countdown">15</span>s</div>
+        <div class="timer-box" id="timerBox">⏳ Please wait... <span id="countdown">15</span>s</div>
         
         <br><br>
         <button class="btn" id="verifyBtn" style="background-color: #10b981; display: none;" onclick="completeVerification()">2. Get File & Credits 🎉</button>
@@ -88,7 +75,12 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
+        let timerStarted = false;
+
         function startTimer() {
+            if (timerStarted) return;
+            timerStarted = true;
+
             const linkBtn = document.getElementById('adLinkBtn');
             const timerBox = document.getElementById('timerBox');
             const countdownEl = document.getElementById('countdown');
@@ -112,6 +104,12 @@
         }
 
         function completeVerification() {
+            const verifyBtn = document.getElementById('verifyBtn');
+            verifyBtn.style.pointerEvents = 'none';
+            verifyBtn.style.opacity = '0.5';
+            verifyBtn.innerText = "Processing...";
+
+            // Server ko signal bhejo ki task ho gaya hai
             window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
         }
     </script>
