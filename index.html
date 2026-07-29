@@ -4,9 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Watch Ad to Unlock File</title>
-    
-    <!-- Telegram WebApp SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <!-- Ad Provider Script -->
     <script src='https://libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
@@ -45,47 +42,36 @@
 <body>
 
     <div class="card">
-        <h2>🎬 Watch Ad & Claim</h2>
-        <p id="status">Click below to watch the ad and get 3 Credits.</p>
+        <h2>🎬 Watch Ad & Claim File</h2>
+        <p id="status">Click below to watch the ad and unlock your credits.</p>
 
         <button id="adBtn" class="btn" onclick="watchAd()">Watch Ad Now 🚀</button>
     </div>
 
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+        function completeAd() {
+            document.getElementById('status').innerText = "✅ Verified! Redirecting to Bot...";
+            
+            // Telegram Bot ko verify param ke saath redirect karna
+            setTimeout(() => {
+                window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
+            }, 800);
+        }
 
         function watchAd() {
-            const statusTxt = document.getElementById('status');
-            const btn = document.getElementById('adBtn');
+            document.getElementById('status').innerText = "Playing ad... Please wait.";
+            document.getElementById('adBtn').style.display = 'none';
 
-            statusTxt.innerText = "Playing ad... Please wait.";
-            btn.style.display = 'none';
-
-            function complete() {
-                statusTxt.innerText = "✅ Ad Watched! Sending data...";
-                try {
-                    // Method 1: Send Data to Bot
-                    tg.sendData("ad_completed");
-                } catch (e) {}
-
-                // Method 2: Close Mini App after 1 second
-                setTimeout(() => {
-                    tg.close();
-                }, 1000);
-            }
-
-            // Try playing Ad
             if (typeof window.show_11452552 === 'function') {
                 window.show_11452552().then(() => {
-                    complete();
+                    completeAd();
                 }).catch((err) => {
-                    // Ad missed/failed fallback
-                    complete();
+                    // Fallback to claim if ad skipped
+                    completeAd();
                 });
             } else {
-                // Script fail fallback
-                complete();
+                // Fallback if script fails to load
+                completeAd();
             }
         }
     </script>
