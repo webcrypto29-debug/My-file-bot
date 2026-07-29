@@ -46,8 +46,8 @@
         .btn:disabled { background-color: #475569; cursor: not-allowed; }
     </style>
 
-    <!-- Monetag SDK Script (Zone ID: 11452552) -->
-    <script src='//libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
+    <!-- Monetag SDK Script -->
+    <script src="//libtl.com/sdk.js" data-zone="11452552" data-sdk="show_11452552"></script>
 </head>
 <body>
 
@@ -61,30 +61,48 @@
         let tg = window.Telegram.WebApp;
         tg.expand();
 
+        // URL से टोकन निकालना
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token') || '';
+
         function startMonetagAd() {
             const btn = document.getElementById("adBtn");
             btn.innerText = "Loading Ad...";
             btn.disabled = true;
 
-            // Check if Monetag function is loaded
+            // अगर फंक्शन तुरंत उपलब्ध है
             if (typeof show_11452552 === 'function') {
-                show_11452552().then(() => {
-                    // This executes after the user successfully watches the ad
-                    alert('Ad watched successfully! Click OK to get your file.');
-                    window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
-                }).catch((error) => {
-                    console.log("Ad error or skipped:", error);
-                    btn.innerText = "Watch Ad Now 🎬";
-                    btn.disabled = false;
-                    alert("Ad could not be loaded or was skipped. Please try again.");
-                });
+                runAd();
             } else {
-                // Fallback if SDK fails to load (e.g. adblocker)
-                alert("Ad network is taking time. Redirecting to bot...");
-                setTimeout(() => {
-                    window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
-                }, 1500);
+                // नेटवर्क स्लो होने पर 1-1 सेकंड करके 5 बार चेक करेगा
+                btn.innerText = "Connecting to Ad Network...";
+                let attempts = 0;
+                let checkInterval = setInterval(() => {
+                    attempts++;
+                    if (typeof show_11452552 === 'function') {
+                        clearInterval(checkInterval);
+                        runAd();
+                    } else if (attempts > 5) {
+                        clearInterval(checkInterval);
+                        alert("Ad network is not responding or blocked. Please turn off Ad-blocker and try again.");
+                        btn.innerText = "Watch Ad Now 🎬";
+                        btn.disabled = false;
+                    }
+                }, 1000);
             }
+        }
+
+        function runAd() {
+            show_11452552().then(() => {
+                // एड पूरा देखने के बाद टोकन के साथ बॉट पर भेजना
+                window.location.href = `https://t.me/MyFile727_bot?start=${token}`;
+            }).catch((error) => {
+                console.log("Ad skipped or failed:", error);
+                const btn = document.getElementById("adBtn");
+                btn.innerText = "Watch Ad Now 🎬";
+                btn.disabled = false;
+                alert("Please watch the full ad to unlock the file.");
+            });
         }
     </script>
 </body>
