@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unlock Content - Timer Verification</title>
+    <title>Watch Ad & Unlock Content</title>
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Monetag Rewarded Interstitial SDK -->
+    <script src='//libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
 
     <style>
         * {
@@ -54,64 +57,63 @@
             cursor: pointer;
             width: 100%;
             transition: background 0.2s;
-            text-decoration: none;
-            display: inline-block;
         }
         .btn:active {
             background-color: #2563eb;
         }
-        .timer-box {
+        .loading {
             margin-top: 15px;
-            font-size: 15px;
+            font-size: 13px;
             color: #38bdf8;
-            font-weight: 600;
-            display: none;
+            display: block;
         }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <h2>⏱️ Complete Task to Unlock</h2>
-        <p>Click the link below, stay on the opened page for 15 seconds, and then come back to get your file and +3 Credits!</p>
+        <h2>📁 Unlock Your Content</h2>
+        <p>Click below to watch the ad. Complete the ad and close it to instantly receive +3 Credits and unlock your file!</p>
         
-        <!-- Direct Link with 15s Timer -->
-        <a href="https://omg10.com/4/11203254" target="_blank" class="btn" id="adLinkBtn" onclick="startTimer()">1. Click & Visit Ad Link 🚀</a>
-        
-        <div class="timer-box" id="timerBox">⏳ Please wait on the ad page... <span id="countdown">15</span>s</div>
-        
-        <br><br>
-        <button class="btn" id="verifyBtn" style="background-color: #10b981; display: none;" onclick="completeVerification()">2. Get File & Credits 🎉</button>
+        <button class="btn" id="watchBtn" onclick="triggerAd()">Watch Ad Now 🚀</button>
+        <div class="loading" id="loadingText">Ready to load ad...</div>
     </div>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        function startTimer() {
-            const linkBtn = document.getElementById('adLinkBtn');
-            const timerBox = document.getElementById('timerBox');
-            const countdownEl = document.getElementById('countdown');
-            const verifyBtn = document.getElementById('verifyBtn');
+        function triggerAd() {
+            const btn = document.getElementById('watchBtn');
+            const loadingText = document.getElementById('loadingText');
+            
+            btn.style.opacity = '0.6';
+            btn.style.pointerEvents = 'none';
+            loadingText.innerText = "Opening Ad, please wait...";
 
-            linkBtn.style.pointerEvents = 'none';
-            linkBtn.style.opacity = '0.5';
-            timerBox.style.display = 'block';
+            let adDone = false;
 
-            let timeLeft = 15;
-            let timer = setInterval(() => {
-                timeLeft--;
-                countdownEl.innerText = timeLeft;
-
-                if (timeLeft <= 0) {
-                    clearInterval(timer);
-                    timerBox.style.display = 'none';
-                    verifyBtn.style.display = 'block';
-                }
-            }, 1000);
+            // Check if Monetag SDK function exists
+            if (typeof show_11452552 === 'function') {
+                show_11452552().then(() => {
+                    adDone = true;
+                    redirectToBot();
+                }).catch((err) => {
+                    console.log("Ad error/closed:", err);
+                    redirectToBot();
+                });
+            } else {
+                // If SDK script is blocked or takes time inside Telegram WebView
+                loadingText.innerText = "Redirecting for verification...";
+                setTimeout(() => {
+                    if (!adDone) {
+                        redirectToBot();
+                    }
+                }, 2000);
+            }
         }
 
-        function completeVerification() {
+        function redirectToBot() {
             window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
         }
     </script>
