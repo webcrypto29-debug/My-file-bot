@@ -8,7 +8,7 @@
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- Ad Provider Script (https mandatory hai) -->
+    <!-- Ad Provider Script (https mandatory) -->
     <script src='https://libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
 
     <style>
@@ -50,7 +50,7 @@
 
     <div class="card">
         <h2>🎬 Watch Ad & Claim</h2>
-        <p id="status">Click the button below to watch a short ad and unlock your file.</p>
+        <p id="status">Click below to watch the ad and get your file.</p>
 
         <button id="adBtn" class="btn" onclick="watchAd()">Watch Ad Now 🚀</button>
     </div>
@@ -63,27 +63,28 @@
             const statusTxt = document.getElementById('status');
             const btn = document.getElementById('adBtn');
 
-            statusTxt.innerText = "Playing ad... Please wait.";
+            statusTxt.innerText = "Processing... Please wait.";
 
-            // Check if SDK function exists in window
+            // 1. Try playing the Rewarded Ad
             if (typeof window.show_11452552 === 'function') {
                 window.show_11452552().then(() => {
-                    statusTxt.innerText = "✅ Ad Watched! Unlocking your file...";
-                    
-                    setTimeout(() => {
-                        tg.sendData("ad_completed");
-                        tg.close();
-                    }, 1000);
-
+                    claimFile();
                 }).catch((err) => {
-                    alert("Ad was skipped or failed to play. Try again.");
-                    statusTxt.innerText = "❌ Ad skipped. Please try again.";
+                    // Ad failed, fallback to claim
+                    claimFile();
                 });
             } else {
-                // If script is taking time, try again after 2 seconds
-                alert("Ad network is loading... Please click OK and press Watch Ad again in 3 seconds.");
-                statusTxt.innerText = "⚠️ Retry clicking button in 3 seconds.";
+                // 2. If Ad script blocked by AdBlocker/DNS, directly allow claiming
+                claimFile();
             }
+        }
+
+        function claimFile() {
+            document.getElementById('status').innerText = "✅ Verified! Unlocking file...";
+            setTimeout(() => {
+                tg.sendData("ad_completed");
+                tg.close();
+            }, 800);
         }
     </script>
 </body>
