@@ -54,20 +54,28 @@
             font-weight: 600;
             display: none;
         }
+        .alert-msg {
+            color: #ef4444;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
     </style>
 </head>
 <body>
 
     <div class="container">
         <h2>⏱️ Complete Task to Unlock</h2>
-        <p>Click the link below, wait for 15 seconds on the opened page, and then click verify to get your credits!</p>
+        <p>Click the link below, stay on the opened page for 15 seconds, and then click verify to get your file and credits!</p>
         
         <!-- Direct Link -->
         <a href="https://omg10.com/4/11203254" target="_blank" class="btn" id="adLinkBtn" onclick="startTimer()">1. Click & Visit Ad Link 🚀</a>
         
-        <div class="timer-box" id="timerBox">⏳ Please wait... <span id="countdown">15</span>s</div>
+        <div class="timer-box" id="timerBox">⏳ Time remaining: <span id="countdown">15</span> seconds</div>
         
-        <br><br>
+        <div class="alert-msg" id="alertMsg">⚠️ Please wait for the 15-second timer to finish!</div>
+        
+        <br>
         <button class="btn" id="verifyBtn" style="background-color: #10b981; display: none;" onclick="completeVerification()">2. Get File & Credits 🎉</button>
     </div>
 
@@ -75,6 +83,7 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
+        let timerFinished = false;
         let timerStarted = false;
 
         function startTimer() {
@@ -86,8 +95,7 @@
             const countdownEl = document.getElementById('countdown');
             const verifyBtn = document.getElementById('verifyBtn');
 
-            linkBtn.style.pointerEvents = 'none';
-            linkBtn.style.opacity = '0.5';
+            linkBtn.style.opacity = '0.6';
             timerBox.style.display = 'block';
 
             let timeLeft = 15;
@@ -98,18 +106,25 @@
                 if (timeLeft <= 0) {
                     clearInterval(timer);
                     timerBox.style.display = 'none';
+                    timerFinished = true;
                     verifyBtn.style.display = 'block';
+                    linkBtn.style.display = 'none'; // Ad button hata do taaki dubara click na ho
                 }
             }, 1000);
         }
 
         function completeVerification() {
+            if (!timerFinished) {
+                document.getElementById('alertMsg').style.display = 'block';
+                return;
+            }
+
             const verifyBtn = document.getElementById('verifyBtn');
             verifyBtn.style.pointerEvents = 'none';
             verifyBtn.style.opacity = '0.5';
-            verifyBtn.innerText = "Processing...";
+            verifyBtn.innerText = "Redirecting to Bot...";
 
-            // Server ko signal bhejo ki task ho gaya hai
+            // Seedha bot par bhej do verify karne ke liye
             window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
         }
     </script>
