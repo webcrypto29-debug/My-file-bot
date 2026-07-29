@@ -3,90 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch Ad to Unlock File</title>
-    
-    <!-- Telegram WebApp SDK -->
+    <title>Watch Ad & Unlock</title>
+    <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <!-- Ad Provider Script -->
-    <script src='https://libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
-
     <style>
-        body {
-            background-color: #121212;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 30px 15px;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        .card {
-            background: #1e1e1e;
-            border-radius: 12px;
-            padding: 25px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        body {
+            background-color: #0f172a;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
             max-width: 400px;
-            margin: 0 auto;
+            width: 100%;
+        }
+        h2 {
+            margin-bottom: 12px;
+            font-size: 22px;
+            color: #f8fafc;
+        }
+        p {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 24px;
+            line-height: 1.5;
         }
         .btn {
-            background-color: #0088cc;
+            background-color: #3b82f6;
             color: white;
             border: none;
-            padding: 14px 28px;
+            padding: 14px 20px;
             font-size: 16px;
-            font-weight: bold;
-            border-radius: 8px;
+            font-weight: 600;
+            border-radius: 10px;
             cursor: pointer;
             width: 100%;
+            transition: background 0.2s;
+        }
+        .btn:active {
+            background-color: #2563eb;
+        }
+        .loading {
             margin-top: 15px;
+            font-size: 13px;
+            color: #38bdf8;
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h2>🎬 Watch Ad & Claim</h2>
-        <p id="status">Click below to watch the ad and get 3 Credits.</p>
-
-        <button id="adBtn" class="btn" onclick="watchAd()">Watch Ad Now 🚀</button>
+    <div class="container">
+        <h2>📁 Unlock Your File</h2>
+        <p>Click the button below to start watching the ad. Once completed, you will receive your credits instantly.</p>
+        
+        <button class="btn" id="watchBtn" onclick="startAdProcess()">Watch Ad Now 🚀</button>
+        <div class="loading" id="loadingText">Processing, please wait...</div>
     </div>
 
     <script>
+        // Telegram WebApp Initialize
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        function watchAd() {
-            const statusTxt = document.getElementById('status');
-            const btn = document.getElementById('adBtn');
+        function startAdProcess() {
+            const btn = document.getElementById('watchBtn');
+            const loadingText = document.getElementById('loadingText');
+            
+            btn.style.opacity = '0.6';
+            btn.style.pointerEvents = 'none';
+            loadingText.style.display = 'block';
 
-            statusTxt.innerText = "Playing ad... Please wait.";
-            btn.style.display = 'none';
+            // URL से ad token निकालना जो बोट ने भेजा था
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
 
-            function complete() {
-                statusTxt.innerText = "✅ Ad Watched! Sending data...";
-                try {
-                    // Method 1: Send Data to Bot
-                    tg.sendData("ad_completed");
-                } catch (e) {}
-
-                // Method 2: Close Mini App after 1 second
-                setTimeout(() => {
-                    tg.close();
-                }, 1000);
-            }
-
-            // Try playing Ad
-            if (typeof window.show_11452552 === 'function') {
-                window.show_11452552().then(() => {
-                    complete();
-                }).catch((err) => {
-                    // Ad missed/failed fallback
-                    complete();
-                });
-            } else {
-                // Script fail fallback
-                complete();
-            }
+            // यहाँ अपना Ad Network का असली कोड या लिंक डाल सकते हो
+            // फ़िलहाल यह सिमुलेशन के लिए 2 सेकंड बाद बोट पर टोकन के साथ वापस भेज रहा है
+            setTimeout(() => {
+                if (token) {
+                    // बोट पर वापस भेजने के लिए Telegram WebApp close करके start कमांड भेजना
+                    window.location.href = `https://t.me/MyFile727_bot?start=${token}`;
+                } else {
+                    window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
+                }
+            }, 2500);
         }
     </script>
 </body>
