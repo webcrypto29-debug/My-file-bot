@@ -3,9 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch Ad & Unlock</title>
+    <title>Watch Ad & Unlock File</title>
     <!-- Telegram Web App SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- 📌 Monetag / Ad Network Rewarded Interstitial SDK Script -->
+    <!-- (यहाँ तेरी Monetag की असली monetization script रहेगी) -->
+    <script src="https://alwingulla.com/88/tag.min.js" data-zone="YOUR_ZONE_ID" async data-cfasync="false"></script>
+
     <style>
         * {
             margin: 0;
@@ -69,10 +74,10 @@
 
     <div class="container">
         <h2>📁 Unlock Your File</h2>
-        <p>Click the button below to start watching the ad. Once completed, you will receive your credits instantly.</p>
+        <p>Click below to watch the rewarded ad. After watching the complete ad, your file will be unlocked instantly!</p>
         
-        <button class="btn" id="watchBtn" onclick="startAdProcess()">Watch Ad Now 🚀</button>
-        <div class="loading" id="loadingText">Processing, please wait...</div>
+        <button class="btn" id="watchBtn" onclick="showAd()">Watch Ad Now 🚀</button>
+        <div class="loading" id="loadingText">Loading Ad, please wait...</div>
     </div>
 
     <script>
@@ -80,7 +85,7 @@
         const tg = window.Telegram.WebApp;
         tg.expand();
 
-        function startAdProcess() {
+        function showAd() {
             const btn = document.getElementById('watchBtn');
             const loadingText = document.getElementById('loadingText');
             
@@ -88,20 +93,27 @@
             btn.style.pointerEvents = 'none';
             loadingText.style.display = 'block';
 
-            // URL से ad token निकालना जो बोट ने भेजा था
-            const urlParams = new URLSearchParams(window.location.search);
-            const token = urlParams.get('token');
+            // Monetag / Ad Network Rewarded Call Logic
+            if (typeof show_8875654 === 'function') { // अपनी zone id / function के हिसाब से इसे चेक कर सकते हैं
+                show_8875654().then(() => {
+                    // Ad finished successfully
+                    redirectToBot();
+                }).catch((e) => {
+                    // Fallback agar ad load na ho ya skip ho jaye
+                    console.log("Ad error or closed:", e);
+                    redirectToBot();
+                });
+            } else {
+                // Direct fallback agar SDK load hone mein time le toh thoda wait karke redirect kare
+                setTimeout(() => {
+                    redirectToBot();
+                }, 3000);
+            }
+        }
 
-            // यहाँ अपना Ad Network का असली कोड या लिंक डाल सकते हो
-            // फ़िलहाल यह सिमुलेशन के लिए 2 सेकंड बाद बोट पर टोकन के साथ वापस भेज रहा है
-            setTimeout(() => {
-                if (token) {
-                    // बोट पर वापस भेजने के लिए Telegram WebApp close करके start कमांड भेजना
-                    window.location.href = `https://t.me/MyFile727_bot?start=${token}`;
-                } else {
-                    window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
-                }
-            }, 2500);
+        function redirectToBot() {
+            // बोट पर वापस रीडायरेक्ट ताकि क्रेडिट्स मिल जाएं और फाइल सेंड हो जाए
+            window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
         }
     </script>
 </body>
