@@ -2,3 +2,4 @@ python-telegram-bot
 pymongo
 certifi
 dnspython
+requests
