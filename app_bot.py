@@ -204,6 +204,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
+        # RichAds Ad Fetch & Send
+        try:
+            import requests
+            res = requests.post(
+                "http://15068.xml.adx1.com/telegram-mb",
+                json={
+                    "language_code": "en",
+                    "publisher_id": "792361",
+                    "telegram_id": str(user_id),
+                    "production": True
+                },
+                timeout=5
+            )
+            if res.status_code == 200:
+                ad_data = res.json()
+                if "text" in ad_data:
+                    await safe_reply(ad_data["text"])
+        except Exception as e:
+            print("RichAds Error:", e)
+            
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
