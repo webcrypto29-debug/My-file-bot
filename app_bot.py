@@ -204,34 +204,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-                # RichAds Ad Fetch & Send (Inbuilt urllib module)
-        try:
-            import urllib.request
-            import json
+    # RichAds Ad Fetch & Send (Inbuilt urllib module)
+    try:
+        import urllib.request
+        import json
 
-            url = "http://15068.xml.adx1.com/telegram-mb"
-            payload = json.dumps({
-                "language_code": "en",
-                "publisher_id": "792361",
-                "telegram_id": str(user_id),
-                "production": True
-            }).encode('utf-8')
+        url = "http://15068.xml.adx1.com/telegram-mb"
+        payload = json.dumps({
+            "language_code": "en",
+            "publisher_id": "792361",
+            "telegram_id": str(user_id),
+            "production": True
+        }).encode('utf-8')
 
-            req = urllib.request.Request(
-                url, 
-                data=payload, 
-                headers={'Content-Type': 'application/json'}
-            )
+        req = urllib.request.Request(
+            url, 
+            data=payload, 
+            headers={'Content-Type': 'application/json'}
+        )
 
-            with urllib.request.urlopen(req, timeout=5) as response:
-                if response.status == 200:
-                    ad_data = json.loads(response.read().decode('utf-8'))
-                    if "text" in ad_data:
-                        await safe_reply(ad_data["text"])
-        except Exception as e:
-            print("RichAds Error:", e)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                ad_data = json.loads(response.read().decode('utf-8'))
+                if "text" in ad_data:
+                    await safe_reply(ad_data["text"])
+    except Exception as e:
+        print("RichAds Error:", e)
 
-            
+
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -252,6 +252,7 @@ async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             context.args = [param] if param and param != "None" else []
             await start(update, context)
+
 
 async def send_requested_item_direct(update, context, user_id, session):
     item_id = session["id"]
