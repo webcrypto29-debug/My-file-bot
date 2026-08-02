@@ -204,25 +204,33 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-        # RichAds Ad Fetch & Send
+                # RichAds Ad Fetch & Send (Inbuilt urllib module)
         try:
-            import requests
-            res = requests.post(
-                "http://15068.xml.adx1.com/telegram-mb",
-                json={
-                    "language_code": "en",
-                    "publisher_id": "792361",
-                    "telegram_id": str(user_id),
-                    "production": True
-                },
-                timeout=5
+            import urllib.request
+            import json
+
+            url = "http://15068.xml.adx1.com/telegram-mb"
+            payload = json.dumps({
+                "language_code": "en",
+                "publisher_id": "792361",
+                "telegram_id": str(user_id),
+                "production": True
+            }).encode('utf-8')
+
+            req = urllib.request.Request(
+                url, 
+                data=payload, 
+                headers={'Content-Type': 'application/json'}
             )
-            if res.status_code == 200:
-                ad_data = res.json()
-                if "text" in ad_data:
-                    await safe_reply(ad_data["text"])
+
+            with urllib.request.urlopen(req, timeout=5) as response:
+                if response.status == 200:
+                    ad_data = json.loads(response.read().decode('utf-8'))
+                    if "text" in ad_data:
+                        await safe_reply(ad_data["text"])
         except Exception as e:
             print("RichAds Error:", e)
+
             
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
