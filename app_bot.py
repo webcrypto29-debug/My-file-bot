@@ -20,7 +20,6 @@ from telegram.ext import (
 )
 
 # ----------------- SERVER KEEP-ALIVE -----------------
-# Render / Web Service Port Binding
 class SimpleHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -28,7 +27,7 @@ class SimpleHandler(BaseHTTPRequestHandler):
         self.wfile.write(b"Bot is active and running!")
 
     def log_message(self, format, *args):
-        return  # Disable console spam
+        return
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -37,7 +36,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Termux DNS Fix (if needed)
+# Termux DNS Fix
 try:
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
     dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
@@ -61,8 +60,10 @@ batch_col = db["batches"]
 users_col = db["users"]
 channels_col = db["fsub_channels"]
 settings_col = db["settings"]
+broadcast_history_col = db["broadcast_history"] # ब्रॉडकास्ट मैसेज ट्रैक करने के लिए
 
 user_data = {}
+broadcast_control = {"is_running": False}
 
 def get_ad_status():
     st = settings_col.find_one({"_id": "ad_status"})
@@ -99,7 +100,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
 
-    # ALWAYS SAVE VISITING USER IN DB PERMANENTLY
     user_doc = users_col.find_one({"_id": user_id})
     if not user_doc:
         users_col.insert_one({"_id": user_id, "credits": 0})
@@ -176,7 +176,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }
             user_data[user_id] = session_info
 
-            # Skip Ads if Toggled OFF
             if not get_ad_status():
                 await send_requested_item_direct(update, context, user_id, session_info, deduct_credit=False)
                 return
@@ -203,28 +202,69 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown",
     )
 
-    # Optional: Fetch initial RichAd
+
+# ----------------- BROADCAST & DELETE CONTROLS -----------------
+async def run_background_broadcast(bot, admin_chat_id, reply_msg, extra_markup):
+    global broadcast_control
+    broadcast_control["is_running"] = True
+
+    all_users = list(users_col.find({}))
+    total_users = len(all_users)
+
+    if total_users == 0:
+        broadcast_control["is_running"] = False
+        await bot.send_message(chat_id=admin_chat_id, text="ℹ️ डेटाबेस में कोई भी यूज़र नहीं मिला।")
+        return
+
+    status_msg = await bot.send_message(chat_id=admin_chat_id, text=f"🚀 {total_users} यूज़र्स को ब्रॉडकास्ट भेजा जा रहा है...\n🛑 रोकने के लिए `/stopbroadcast` भेजें।")
+
+    success = 0
+    failed = 0
+
+    for u in all_users:
+        if not broadcast_control["is_running"]:
+            await bot.send_message(chat_id=admin_chat_id, text="⚠️ **ब्रॉडकास्ट बीच में ही रोक दिया गया है!**")
+            break
+
+        u_id = u["_id"]
+        try:
+            # मैसेज कॉपी करके भेजना और उसका message_id रिकॉर्ड करना
+            sent_msg = await bot.copy_message(
+                chat_id=int(u_id),
+                from_chat_id=reply_msg.chat_id,
+                message_id=reply_msg.message_id,
+                reply_markup=extra_markup
+            )
+            if sent_msg:
+                broadcast_history_col.insert_one({
+                    "user_id": int(u_id),
+                    "message_id": sent_msg.message_id
+                })
+            success += 1
+            await asyncio.sleep(0.05)
+        except Exception:
+            failed += 1
+
+    broadcast_control["is_running"] = False
+
     try:
-        url = "http://15068.xml.adx1.com/telegram-mb"
-        payload = json.dumps({
-            "language_code": "en",
-            "publisher_id": "792361",
-            "telegram_id": str(user_id),
-            "production": True,
-        }).encode("utf-8")
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=5) as response:
-            if response.status == 200:
-                ad_data = json.loads(response.read().decode("utf-8"))
-                if "text" in ad_data:
-                    await safe_reply(ad_data["text"])
+        await status_msg.edit_text(
+            f"✅ **ब्रॉडकास्ट प्रक्रिया समाप्त हुई!**\n\n"
+            f"👥 कुल यूज़र्स: **{total_users}**\n"
+            f"🎯 सफलतापूर्वक भेजा गया: **{success}**\n"
+            f"❌ विफल/ब्लॉक: **{failed}**",
+            parse_mode="Markdown"
+        )
     except Exception:
         pass
 
 
-# ----------------- BROADCAST WITH FULL INLINE BUTTON LAYOUT -----------------
 async def broadcast_richads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
+
+    if broadcast_control["is_running"]:
+        await update.message.reply_text("⚠️ पहले से एक ब्रॉडकास्ट चल रहा है! उसे रोकने के लिए `/stopbroadcast` भेजें।")
         return
 
     if not update.message.reply_to_message:
@@ -236,45 +276,62 @@ async def broadcast_richads(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     reply_msg = update.message.reply_to_message
-    
-    # बटन्स और लेआउट (Inline Markup) को एक्सट्रेक्ट करें
     extra_markup = reply_msg.reply_markup if reply_msg.reply_markup else None
 
-    all_users = list(users_col.find({}))
-    total_users = len(all_users)
+    asyncio.create_task(run_background_broadcast(
+        bot=context.bot,
+        admin_chat_id=update.effective_chat.id,
+        reply_msg=reply_msg,
+        extra_markup=extra_markup
+    ))
 
-    if total_users == 0:
-        await update.message.reply_text("ℹ️ डेटाबेस में कोई भी यूज़र नहीं मिला।")
+
+async def stop_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
         return
+    
+    if broadcast_control["is_running"]:
+        broadcast_control["is_running"] = False
+        await update.message.reply_text("🛑 ब्रॉडकास्ट रोकने की कमांड ले ली गई है। यह तुरंत बंद हो रहा है...")
+    else:
+        await update.message.reply_text("ℹ️ इस समय कोई भी ब्रॉडकास्ट चालू नहीं है।")
 
-    status_msg = await update.message.reply_text(f"🚀 {total_users} यूज़र्स को बटन्स के साथ ब्रॉडकास्ट भेजा जा रहा है...")
 
-    success = 0
-    failed = 0
-
-    for u in all_users:
-        u_id = u["_id"]
+async def delete_broadcasts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
+    
+    records = list(broadcast_history_col.find({}))
+    if not records:
+        await update.message.reply_text("ℹ️ डेटाबेस में डिलीट करने के लिए कोई पुराना ब्रॉडकास्ट रिकॉर्ड नहीं मिला।")
+        return
+    
+    status_msg = await update.message.reply_text(f"🗑 कुल {len(records)} ब्रॉडकास्ट मैसेज्स को यूज़र्स की चैट से डिलीट किया जा रहा है...")
+    
+    deleted_count = 0
+    failed_count = 0
+    
+    for rec in records:
         try:
-            # exact structure + media + markup को कॉपी करके भेजना
-            await context.bot.copy_message(
-                chat_id=int(u_id),
-                from_chat_id=reply_msg.chat_id,
-                message_id=reply_msg.message_id,
-                reply_markup=extra_markup
-            )
-            success += 1
-            await asyncio.sleep(0.05) # Rate limits से बचने के लिए डिले
-        except Exception as e:
-            print(f"Failed for user {u_id}: {e}")
-            failed += 1
+            await context.bot.delete_message(chat_id=rec["user_id"], message_id=rec["message_id"])
+            deleted_count += 1
+            await asyncio.sleep(0.03)
+        except Exception:
+            failed_count += 1
+            
+    # डेटाबेस से सारे रिकॉर्ड्स हटा दें
+    broadcast_history_col.delete_many({})
+    
+    try:
+        await status_msg.edit_text(
+            f"✅ **ब्रॉडकास्ट डिलीट प्रक्रिया पूरी हुई!**\n\n"
+            f"🗑 सफलतापूर्वक डिलीट किए गए मैसेज: **{deleted_count}**\n"
+            f"⚠️ जो डिलीट नहीं हो सके (यूज़र द्वारा डिलीट या बॉट ब्लॉक): **{failed_count}**",
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
 
-    await status_msg.edit_text(
-        f"✅ **ब्रॉडकास्ट पूरा हुआ!**\n\n"
-        f"👥 कुल यूज़र्स: **{total_users}**\n"
-        f"🎯 सफलतापूर्वक भेजा गया: **{success}**\n"
-        f"❌ नहीं भेजा जा सका (Blocked): **{failed}**",
-        parse_mode="Markdown"
-    )
 
 # ----------------- HELPER FUNCTIONS -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -339,10 +396,12 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status = "🟢 ON" if get_ad_status() else "🔴 OFF"
     await update.message.reply_text(
         "🛠 **Admin Panel:**\n"
-        "• Send Media/Text to generate links.\n"
-        "• Reply to a message with `/sendad` to broadcast (supports buttons).\n"
-        "• `/batch` - Create batch links.\n"
-        f"• `/togglead` - Toggle Ads ({status})\n"
+        "• **Direct Send:** कोई भी फाइल/टेक्स्ट भेजें - तुरंत सिंगल लिंक मिलेगा।\n"
+        "• `/sendad` - (किसी मैसेज पर Reply करके) ब्रॉडकास्ट शुरू करें।\n"
+        "• `/stopbroadcast` - चालू ब्रॉडकास्ट को बीच में रोकें।\n"
+        "• `/deletebroadcast` - सभी भेजे गए ब्रॉडकास्ट मैसेज्स को डिलीट करें।\n"
+        "• `/batch` - बैच लिंक मोड ऑन/ऑफ करें।\n"
+        f"• `/togglead` - एड्स टॉगल करें ({status})\n"
         "• `/addchannel @username`\n"
         "• `/delchannel @username`\n"
         "• `/channels`"
@@ -382,6 +441,7 @@ async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not channels: return await update.message.reply_text("ℹ️ No channels.")
     await update.message.reply_text("📢 Channels:\n" + "\n".join([f"- {c.get('title')}" for c in channels]))
 
+# --- AUTOMATIC SINGLE FILE / BATCH HANDLER ---
 async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID: return
     msg = update.message
@@ -402,23 +462,29 @@ async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYP
     })
 
     if context.user_data.get("in_batch"):
+        if "batch_files" not in context.user_data:
+            context.user_data["batch_files"] = []
         context.user_data["batch_files"].append(unique_id)
         await msg.reply_text(f"✅ Added to batch ({len(context.user_data['batch_files'])})")
     else:
-        await msg.reply_text(f"✅ Link Generated:\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
+        await msg.reply_text(f"✅ **Single File Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
 
 async def start_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID: return
     if context.user_data.get("in_batch"):
-        if not context.user_data.get("batch_files"): return await update.message.reply_text("⚠️ Batch empty!")
+        if not context.user_data.get("batch_files"): 
+            context.user_data["in_batch"] = False
+            return await update.message.reply_text("⚠️ Batch empty! Batch mode exited.")
+        
         batch_id = f"batch_{str(uuid.uuid4())[:8]}"
         batch_col.insert_one({"_id": batch_id, "files": context.user_data["batch_files"]})
         context.user_data["in_batch"] = False
-        await update.message.reply_text(f"🎉 Batch Link:\n`https://t.me/{BOT_USERNAME}?start={batch_id}`", parse_mode="Markdown")
+        context.user_data["batch_files"] = []
+        await update.message.reply_text(f"🎉 **Batch Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={batch_id}`", parse_mode="Markdown")
     else:
         context.user_data["in_batch"] = True
         context.user_data["batch_files"] = []
-        await update.message.reply_text("📦 Batch Mode Started! Send items, then /batch")
+        await update.message.reply_text("📦 **Batch Mode Started!** अब आप जितनी चाहें उतनी फाइल्स भेजें, अंत में दोबारा `/batch` दबाएं।")
 
 # ----------------- MAIN BOOT -----------------
 if __name__ == "__main__":
@@ -426,6 +492,8 @@ if __name__ == "__main__":
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("sendad", broadcast_richads))
+    app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
+    app.add_handler(CommandHandler("deletebroadcast", delete_broadcasts))
     app.add_handler(CommandHandler("batch", start_batch))
     app.add_handler(CommandHandler("admin", admin_help))
     app.add_handler(CommandHandler("togglead", toggle_ad))
