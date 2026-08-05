@@ -60,7 +60,7 @@ batch_col = db["batches"]
 users_col = db["users"]
 channels_col = db["fsub_channels"]
 settings_col = db["settings"]
-broadcast_history_col = db["broadcast_history"] # ब्रॉडकास्ट मैसेज ट्रैक करने के लिए
+broadcast_history_col = db["broadcast_history"]
 
 user_data = {}
 broadcast_control = {"is_running": False}
@@ -228,7 +228,6 @@ async def run_background_broadcast(bot, admin_chat_id, reply_msg, extra_markup):
 
         u_id = u["_id"]
         try:
-            # मैसेज कॉपी करके भेजना और उसका message_id रिकॉर्ड करना
             sent_msg = await bot.copy_message(
                 chat_id=int(u_id),
                 from_chat_id=reply_msg.chat_id,
@@ -319,7 +318,6 @@ async def delete_broadcasts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             failed_count += 1
             
-    # डेटाबेस से सारे रिकॉर्ड्स हटा दें
     broadcast_history_col.delete_many({})
     
     try:
@@ -390,16 +388,33 @@ async def send_requested_item_direct(update, context, user_id, session, deduct_c
 
 
 # ----------------- ADMIN COMMANDS -----------------
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
+    
+    total_users = users_col.count_documents({})
+    total_files = files_col.count_documents({})
+    total_batches = batch_col.count_documents({})
+    
+    await update.message.reply_text(
+        f"📊 **Bot Statistics:**\n\n"
+        f"👥 Total Users: **{total_users}**\n"
+        f"📁 Single Files: **{total_files}**\n"
+        f"📦 Batches Created: **{total_batches}**",
+        parse_mode="Markdown"
+    )
+
 async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID:
         return
     status = "🟢 ON" if get_ad_status() else "🔴 OFF"
     await update.message.reply_text(
         "🛠 **Admin Panel:**\n"
-        "• **Direct Send:** कोई भी फाइल/टेक्स्ट भेजें - तुरंत सिंगल लिंक मिलेगा।\n"
-        "• `/sendad` - (किसी मैसेज पर Reply करके) ब्रॉडकास्ट शुरू करें।\n"
-        "• `/stopbroadcast` - चालू ब्रॉडकास्ट को बीच में रोकें।\n"
-        "• `/deletebroadcast` - सभी भेजे गए ब्रॉडकास्ट मैसेज्स को डिलीट करें।\n"
+        "• `/stats` - यूज़र्स और फाइल्स के स्टैट्स देखें।\n"
+        "• **Direct Send / /genlink:** फाइल भेजें या `/genlink` से लिंक बनाएं।\n"
+        "• `/sendad` - (मैसेज पर Reply करके) ब्रॉडकास्ट शुरू करें।\n"
+        "• `/stopbroadcast` - चालू ब्रॉडकास्ट रोकें।\n"
+        "• `/deletebroadcast` - सभी ब्रॉडकास्ट मैसेज्स डिलीट करें।\n"
         "• `/batch` - बैच लिंक मोड ऑन/ऑफ करें।\n"
         f"• `/togglead` - एड्स टॉगल करें ({status})\n"
         "• `/addchannel @username`\n"
@@ -440,6 +455,35 @@ async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     channels = list(channels_col.find())
     if not channels: return await update.message.reply_text("ℹ️ No channels.")
     await update.message.reply_text("📢 Channels:\n" + "\n".join([f"- {c.get('title')}" for c in channels]))
+
+# --- /genlink COMMAND HANDLER ---
+async def gen_link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
+    
+    msg = update.message
+    if not msg.reply_to_message:
+        await update.message.reply_text("⚠️ कृपया किसी फाइल, फोटो या टेक्स्ट मैसेज पर **Reply** करके `/genlink` लिखें!")
+        return
+    
+    target_msg = msg.reply_to_message
+    unique_id = str(uuid.uuid4())[:8]
+    item_type, file_id = "text", None
+
+    if target_msg.document: item_type, file_id = "file", target_msg.document.file_id
+    elif target_msg.video: item_type, file_id = "video", target_msg.video.file_id
+    elif target_msg.photo: item_type, file_id = "photo", target_msg.photo[-1].file_id
+    elif target_msg.text: item_type = "text"
+    else:
+        await update.message.reply_text("❌ समर्थित फ़ॉर्मेट नहीं है!")
+        return
+
+    files_col.insert_one({
+        "_id": unique_id, "item_type": item_type, "file_id": file_id,
+        "caption": target_msg.caption or "", "text": target_msg.text if item_type == "text" else ""
+    })
+
+    await update.message.reply_text(f"✅ **Single File Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
 
 # --- AUTOMATIC SINGLE FILE / BATCH HANDLER ---
 async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -491,9 +535,11 @@ if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0).build()
     
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("sendad", broadcast_richads))
     app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
     app.add_handler(CommandHandler("deletebroadcast", delete_broadcasts))
+    app.add_handler(CommandHandler("genlink", gen_link_command))
     app.add_handler(CommandHandler("batch", start_batch))
     app.add_handler(CommandHandler("admin", admin_help))
     app.add_handler(CommandHandler("togglead", toggle_ad))
