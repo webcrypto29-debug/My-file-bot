@@ -107,6 +107,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
           chat_id=user_id, text=text, **kwargs
       )
 
+  # EVERY VISITING USER IS SAVED IN DB PERMANENTLY
   user_doc = users_col.find_one({"_id": user_id})
   if not user_doc:
     users_col.insert_one({"_id": user_id, "credits": 0})
@@ -180,7 +181,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if new_balance >= 1:
       users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
-      await send_requested_item_direct(update, context, user_id, user_session)
+      await send_requested_item_direct(
+          update, context, user_id, user_session, deduct_credit=True
+      )
     return
 
   # 3. File / Link / Batch Share Check
@@ -198,14 +201,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
       }
       user_data[user_id] = session_info
 
-      # अगर एड्स बंद हैं तो बिना किसी क्रेडिट के फ़ाइल तुरंत भेजें
+      # अगर एड्स बंद हैं तो बिना क्रेडिट के फ़ाइल तुरंत भेजें
       if not get_ad_status():
         await send_requested_item_direct(
             update, context, user_id, session_info, deduct_credit=False
         )
         return
 
-      # अगर एड्स चालू हैं और यूज़र के पास क्रेडिट है
+      # अगर एड्स चालू हैं और क्रेडिट है
       if current_credits >= 1:
         users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
         await send_requested_item_direct(
@@ -242,24 +245,55 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
       parse_mode="Markdown",
   )
 
+  # RichAds Auto Fetch on /start
+  try:
+    url = "http://15068.xml.adx1.com/telegram-mb"
+    payload = json.dumps({
+        "language_code": "en",
+        "publisher_id": "792361",
+        "telegram_id": str(user_id),
+        "production": True,
+    }).encode("utf-8")
 
-# ----------------- MANUAL RICHADS BROADCAST (ADMIN ONLY) -----------------
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}
+    )
+
+    with urllib.request.urlopen(req, timeout=5) as response:
+      if response.status == 200:
+        ad_data = json.loads(response.read().decode("utf-8"))
+        if "text" in ad_data:
+          await safe_reply(ad_data["text"])
+  except Exception as e:
+    print("RichAds Error:", e)
+
+
+# ----------------- REPLY-BASED BROADCAST (ADMIN ONLY) -----------------
 async def broadcast_richads(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ):
   if not update.effective_user or update.effective_user.id != ADMIN_ID:
     return
 
+  if not update.message.reply_to_message:
+    await update.message.reply_text(
+        "⚠️ **How to use:**\n\n"
+        "Reply to any message or ad and type `/sendad` to broadcast it to all"
+        " users!",
+        parse_mode="Markdown",
+    )
+    return
+
+  reply_msg = update.message.reply_to_message
   all_users = list(users_col.find({}))
   total_users = len(all_users)
 
   if total_users == 0:
-    await update.message.reply_text("ℹ️ डेटाबेस में कोई यूज़र नहीं मिला।")
+    await update.message.reply_text("ℹ️ No users found in database.")
     return
 
-  await update.message.reply_text(
-      f"🚀 {total_users} यूज़र्स को RichAds विज्ञापन भेजना शुरू किया जा रहा"
-      " है..."
+  status_msg = await update.message.reply_text(
+      f"🚀 Broadcasting message to {total_users} users..."
   )
 
   success = 0
@@ -268,33 +302,17 @@ async def broadcast_richads(
   for u in all_users:
     u_id = u["_id"]
     try:
-      url = "http://15068.xml.adx1.com/telegram-mb"
-      payload = json.dumps({
-          "language_code": "en",
-          "publisher_id": "792361",
-          "telegram_id": str(u_id),
-          "production": True,
-      }).encode("utf-8")
-
-      req = urllib.request.Request(
-          url, data=payload, headers={"Content-Type": "application/json"}
-      )
-
-      with urllib.request.urlopen(req, timeout=5) as response:
-        if response.status == 200:
-          ad_data = json.loads(response.read().decode("utf-8"))
-          if "text" in ad_data:
-            await context.bot.send_message(chat_id=u_id, text=ad_data["text"])
-            success += 1
-
-      await asyncio.sleep(0.08)
-
+      await reply_msg.copy(chat_id=int(u_id))
+      success += 1
+      await asyncio.sleep(0.05)
     except Exception:
       failed += 1
 
-  await update.message.reply_text(
-      f"✅ **मैनुअल ब्रॉडकास्ट पूरा हुआ!**\n\n🎯 सफलतापूर्वक भेजा गया:"
-      f" **{success}**\n❌ नहीं भेजा जा सका (Blocked/Failed): **{failed}**",
+  await status_msg.edit_text(
+      f"✅ **Broadcast Done!**\n\n"
+      f"👥 Total Users: **{total_users}**\n"
+      f"🎯 Success: **{success}**\n"
+      f"❌ Failed/Blocked: **{failed}**",
       parse_mode="Markdown",
   )
 
@@ -412,7 +430,7 @@ async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
   await update.message.reply_text(
       "🛠 **Admin Panel:**\n"
       "• Send any File, Photo, Video or Web Link to create a link.\n"
-      "• `/sendad` - Broadcast RichAds manually to all users.\n"
+      "• Reply to any message with `/sendad` to broadcast to all users.\n"
       "• `/batch` - Start/Finish batch.\n"
       f"• `/togglead` - Turn Ads ON/OFF (Current: {status_text})\n"
       "• `/addchannel @username`\n"
@@ -536,9 +554,7 @@ async def handle_admin_content(
   else:
     share_link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
     await msg.reply_text(
-        "✅ **Link Generated Successfully!**\n\n🔗 **Shareable Link:**\n`"
-        + share_link
-        + "`",
+        f"✅ **Link Generated Successfully!**\n\n🔗 **Shareable Link:**\n`{share_link}`",
         parse_mode="Markdown",
     )
 
@@ -557,7 +573,7 @@ async def start_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["batch_files"] = []
     batch_link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
     await update.message.reply_text(
-        "🎉 **Batch Link Created!**\n\n🔗 **Batch Link:**\n`" + batch_link + "`",
+        f"🎉 **Batch Link Created!**\n\n🔗 **Batch Link:**\n`{batch_link}`",
         parse_mode="Markdown",
     )
   else:
