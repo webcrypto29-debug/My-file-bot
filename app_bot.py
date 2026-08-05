@@ -19,34 +19,30 @@ from telegram.ext import (
     filters,
 )
 
-
-# Render / Web Service Port Binding (Port Keep-Alive Server)
+# ----------------- SERVER KEEP-ALIVE -----------------
+# Render / Web Service Port Binding
 class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is active and running!")
 
-  def do_GET(self):
-    self.send_response(200)
-    self.end_headers()
-    self.wfile.write(b"Bot is active and running!")
-
-  def log_message(self, format, *args):
-    return  # Disable console spam for health checks
-
+    def log_message(self, format, *args):
+        return  # Disable console spam
 
 def run_web_server():
-  port = int(os.environ.get("PORT", 10000))
-  server = HTTPServer(("0.0.0.0", port), SimpleHandler)
-  server.serve_forever()
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
 
-
-# Start background web server thread
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Termux DNS Fix
+# Termux DNS Fix (if needed)
 try:
-  dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
-  dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
+    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+    dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
 except Exception:
-  pass
+    pass
 
 # ----------------- CONFIGURATION -----------------
 TOKEN = "8737537284:AAGtP8lwqR3LRwAy4ZWg5iyQG8SdNcFW6fg"
@@ -54,10 +50,10 @@ MINI_APP_URL = "https://webcrypto29-debug.github.io/My-file-bot/"
 BOT_USERNAME = "MyFile727_bot"
 
 MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
-
 ADMIN_ID = 5911965767
 # --------------------------------------------------
 
+# MongoDB Setup
 mongo_client = pymongo.MongoClient(MONGO_URI)
 db = mongo_client["FileBotDB"]
 files_col = db["files"]
@@ -68,545 +64,376 @@ settings_col = db["settings"]
 
 user_data = {}
 
-
 def get_ad_status():
-  st = settings_col.find_one({"_id": "ad_status"})
-  if st:
-    return st.get("status", True)
-  return True
-
+    st = settings_col.find_one({"_id": "ad_status"})
+    if st:
+        return st.get("status", True)
+    return True
 
 async def check_force_sub(bot, user_id):
-  channels = list(channels_col.find())
-  unjoined = []
-  for ch in channels:
-    ch_id = ch["_id"]
-    try:
-      member = await bot.get_chat_member(chat_id=ch_id, user_id=user_id)
-      if member.status not in ["member", "administrator", "creator"]:
-        unjoined.append(ch)
-    except Exception:
-      pass
-  return unjoined
+    channels = list(channels_col.find())
+    unjoined = []
+    for ch in channels:
+        ch_id = ch["_id"]
+        try:
+            member = await bot.get_chat_member(chat_id=ch_id, user_id=user_id)
+            if member.status not in ["member", "administrator", "creator"]:
+                unjoined.append(ch)
+        except Exception:
+            pass
+    return unjoined
 
-
+# ----------------- MAIN START HANDLER -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  user = update.effective_user
-  if not user:
-    return
-  user_id = user.id
-  args = context.args
+    user = update.effective_user
+    if not user:
+        return
+    user_id = user.id
+    args = context.args
 
-  async def safe_reply(text, **kwargs):
-    if update.message:
-      return await update.message.reply_text(text, **kwargs)
-    elif update.callback_query and update.callback_query.message:
-      return await update.callback_query.message.reply_text(text, **kwargs)
+    async def safe_reply(text, **kwargs):
+        if update.message:
+            return await update.message.reply_text(text, **kwargs)
+        elif update.callback_query and update.callback_query.message:
+            return await update.callback_query.message.reply_text(text, **kwargs)
+        else:
+            return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
+
+    # ALWAYS SAVE VISITING USER IN DB PERMANENTLY
+    user_doc = users_col.find_one({"_id": user_id})
+    if not user_doc:
+        users_col.insert_one({"_id": user_id, "credits": 0})
+        current_credits = 0
     else:
-      return await context.bot.send_message(
-          chat_id=user_id, text=text, **kwargs
-      )
+        current_credits = user_doc.get("credits", 0)
 
-  # EVERY VISITING USER IS SAVED IN DB PERMANENTLY
-  user_doc = users_col.find_one({"_id": user_id})
-  if not user_doc:
-    users_col.insert_one({"_id": user_id, "credits": 0})
-    current_credits = 0
-  else:
-    current_credits = user_doc.get("credits", 0)
-
-  # 1. Force Sub Check FIRST
-  unjoined_channels = await check_force_sub(context.bot, user_id)
-  if unjoined_channels:
-    keyboard = []
-    for ch in unjoined_channels:
-      link = ch.get("link", f"https://t.me/{str(ch['_id']).replace('@', '')}")
-      keyboard.append([
-          InlineKeyboardButton(f"Join {ch.get('title', 'Channel')} 📢", url=link)
-      ])
-
-    start_param = args[0] if args else "None"
-    keyboard.append([
-        InlineKeyboardButton(
-            "Joined! Check Now 🔄", callback_data=f"check_fsub_{start_param}"
-        )
-    ])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await safe_reply(
-        "⚠️ **Must Join Channels!**\n\nTo access files/links, please join our"
-        " required channels first:",
-        reply_markup=reply_markup,
-        parse_mode="Markdown",
-    )
-    return
-
-  # 2. Production Ad Verification Handler (Anti-Cheat & Replay Protection)
-  if args and args[0] == "VERIFY_AD":
-    user_session = user_data.get(user_id)
-    if not user_session:
-      await safe_reply(
-          "⚠️ No active file request found. Please click a share link first!"
-      )
-      return
-
-    if user_session.get("verified", False):
-      await safe_reply(
-          "⚠️ This ad session is already used. Please open a new share link."
-      )
-      return
-
-    click_time = user_session.get("click_time", 0)
-    time_elapsed = time.time() - click_time
-
-    if time_elapsed < 14:
-      await safe_reply(
-          "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed"
-          " properly or finished too quickly. Please watch the ad fully.",
-          parse_mode="Markdown",
-      )
-      return
-
-    user_session["verified"] = True
-
-    users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
-    updated_user = users_col.find_one({"_id": user_id})
-    new_balance = updated_user.get("credits", 0)
-
-    await safe_reply(
-        f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your"
-        f" account.\n💰 Total Balance: **{new_balance} Credits**",
-        parse_mode="Markdown",
-    )
-
-    if new_balance >= 1:
-      users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
-      await send_requested_item_direct(
-          update, context, user_id, user_session, deduct_credit=True
-      )
-    return
-
-  # 3. File / Link / Batch Share Check
-  if args:
-    param = args[0]
-    file_doc = files_col.find_one({"_id": param})
-    batch_doc = batch_col.find_one({"_id": param})
-
-    if file_doc or batch_doc:
-      session_info = {
-          "type": "batch" if batch_doc else "single",
-          "id": param,
-          "verified": False,
-          "click_time": time.time(),
-      }
-      user_data[user_id] = session_info
-
-      # अगर एड्स बंद हैं तो बिना क्रेडिट के फ़ाइल तुरंत भेजें
-      if not get_ad_status():
-        await send_requested_item_direct(
-            update, context, user_id, session_info, deduct_credit=False
+    # 1. Force Sub Check
+    unjoined_channels = await check_force_sub(context.bot, user_id)
+    if unjoined_channels:
+        keyboard = []
+        for ch in unjoined_channels:
+            link = ch.get("link", f"https://t.me/{str(ch['_id']).replace('@', '')}")
+            keyboard.append([InlineKeyboardButton(f"Join {ch.get('title', 'Channel')} 📢", url=link)])
+        
+        start_param = args[0] if args else "None"
+        keyboard.append([InlineKeyboardButton("Joined! Check Now 🔄", callback_data=f"check_fsub_{start_param}")])
+        
+        await safe_reply(
+            "⚠️ **Must Join Channels!**\n\nTo access files/links, please join our required channels first:",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown",
         )
         return
 
-      # अगर एड्स चालू हैं और क्रेडिट है
-      if current_credits >= 1:
-        users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
-        await send_requested_item_direct(
-            update, context, user_id, session_info, deduct_credit=True
+    # 2. Ad Verification Handler
+    if args and args[0] == "VERIFY_AD":
+        user_session = user_data.get(user_id)
+        if not user_session:
+            await safe_reply("⚠️ No active file request found. Please click a share link first!")
+            return
+
+        if user_session.get("verified", False):
+            await safe_reply("⚠️ This ad session is already used. Please open a new share link.")
+            return
+
+        click_time = user_session.get("click_time", 0)
+        time_elapsed = time.time() - click_time
+
+        if time_elapsed < 14:
+            await safe_reply(
+                "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed properly or finished too quickly. Please watch the ad fully.",
+                parse_mode="Markdown",
+            )
+            return
+
+        user_session["verified"] = True
+        users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
+        updated_user = users_col.find_one({"_id": user_id})
+        new_balance = updated_user.get("credits", 0)
+
+        await safe_reply(
+            f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_balance} Credits**",
+            parse_mode="Markdown",
         )
+
+        if new_balance >= 1:
+            users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
+            await send_requested_item_direct(update, context, user_id, user_session, deduct_credit=True)
         return
 
-      keyboard = [[
-          InlineKeyboardButton(
-              "Watch Ad Now  🚀", web_app=WebAppInfo(url=MINI_APP_URL)
-          )
-      ]]
-      reply_markup = InlineKeyboardMarkup(keyboard)
+    # 3. File / Batch Request
+    if args:
+        param = args[0]
+        file_doc = files_col.find_one({"_id": param})
+        batch_doc = batch_col.find_one({"_id": param})
 
-      instruction_text = (
-          "🔒 **File / Link Locked!**\n\n💰 Your Current Credits:"
-          f" **{current_credits}**\n\n📜 **Steps to unlock:**\n1. Click the"
-          " **'Watch Ad Now'** button below.\n2. Complete the rewarded ad and"
-          " wait for the verification timer.\n3. You will instantly receive"
-          " **+3 Credits** and your file!\n\n👇 Click below to start:"
-      )
+        if file_doc or batch_doc:
+            session_info = {
+                "type": "batch" if batch_doc else "single",
+                "id": param,
+                "verified": False,
+                "click_time": time.time(),
+            }
+            user_data[user_id] = session_info
 
-      await safe_reply(
-          instruction_text, reply_markup=reply_markup, parse_mode="Markdown"
-      )
-      return
-    else:
-      await safe_reply("❌ Invalid or expired link!")
-      return
+            # Skip Ads if Toggled OFF
+            if not get_ad_status():
+                await send_requested_item_direct(update, context, user_id, session_info, deduct_credit=False)
+                return
 
-  await safe_reply(
-      f"👋 Welcome!\n\n💰 Your Current Balance: **{current_credits} Credits**\nSend"
-      " or click any share link to get files, photos, videos, or web links!",
-      parse_mode="Markdown",
-  )
+            if current_credits >= 1:
+                users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
+                await send_requested_item_direct(update, context, user_id, session_info, deduct_credit=True)
+                return
 
-  # RichAds Auto Fetch on /start
-  try:
-    url = "http://15068.xml.adx1.com/telegram-mb"
-    payload = json.dumps({
-        "language_code": "en",
-        "publisher_id": "792361",
-        "telegram_id": str(user_id),
-        "production": True,
-    }).encode("utf-8")
+            keyboard = [[InlineKeyboardButton("Watch Ad Now  🚀", web_app=WebAppInfo(url=MINI_APP_URL))]]
+            await safe_reply(
+                f"🔒 **File Locked!**\n\n💰 Your Credits: **{current_credits}**\n\n👇 Click below to watch a short ad. You will get **+3 Credits** and your file instantly!",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
+            )
+            return
+        else:
+            await safe_reply("❌ Invalid or expired link!")
+            return
 
-    req = urllib.request.Request(
-        url, data=payload, headers={"Content-Type": "application/json"}
-    )
-
-    with urllib.request.urlopen(req, timeout=5) as response:
-      if response.status == 200:
-        ad_data = json.loads(response.read().decode("utf-8"))
-        if "text" in ad_data:
-          await safe_reply(ad_data["text"])
-  except Exception as e:
-    print("RichAds Error:", e)
-
-
-# ----------------- REPLY-BASED BROADCAST (ADMIN ONLY) -----------------
-async def broadcast_richads(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-
-  if not update.message.reply_to_message:
-    await update.message.reply_text(
-        "⚠️ **How to use:**\n\n"
-        "Reply to any message or ad and type `/sendad` to broadcast it to all"
-        " users!",
+    # 4. Normal Start
+    await safe_reply(
+        f"👋 Welcome!\n\n💰 Your Current Balance: **{current_credits} Credits**\nSend or click any share link to get files!",
         parse_mode="Markdown",
     )
-    return
 
-  reply_msg = update.message.reply_to_message
-  all_users = list(users_col.find({}))
-  total_users = len(all_users)
-
-  if total_users == 0:
-    await update.message.reply_text("ℹ️ No users found in database.")
-    return
-
-  status_msg = await update.message.reply_text(
-      f"🚀 Broadcasting message to {total_users} users..."
-  )
-
-  success = 0
-  failed = 0
-
-  for u in all_users:
-    u_id = u["_id"]
+    # Optional: Fetch initial RichAd
     try:
-      await reply_msg.copy(chat_id=int(u_id))
-      success += 1
-      await asyncio.sleep(0.05)
+        url = "http://15068.xml.adx1.com/telegram-mb"
+        payload = json.dumps({
+            "language_code": "en",
+            "publisher_id": "792361",
+            "telegram_id": str(user_id),
+            "production": True,
+        }).encode("utf-8")
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            if response.status == 200:
+                ad_data = json.loads(response.read().decode("utf-8"))
+                if "text" in ad_data:
+                    await safe_reply(ad_data["text"])
     except Exception:
-      failed += 1
-
-  await status_msg.edit_text(
-      f"✅ **Broadcast Done!**\n\n"
-      f"👥 Total Users: **{total_users}**\n"
-      f"🎯 Success: **{success}**\n"
-      f"❌ Failed/Blocked: **{failed}**",
-      parse_mode="Markdown",
-  )
-
-
-async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  query = update.callback_query
-  user_id = query.from_user.id
-  data = query.data
-
-  if data.startswith("check_fsub_"):
-    param = data.replace("check_fsub_", "")
-    unjoined = await check_force_sub(context.bot, user_id)
-
-    if unjoined:
-      await query.answer(
-          "❌ You haven't joined all channels yet!", show_alert=True
-      )
-    else:
-      await query.answer("✅ Verified Successfully!")
-      try:
-        await query.message.delete()
-      except Exception:
         pass
 
-      context.args = [param] if param and param != "None" else []
-      await start(update, context)
 
+# ----------------- BROADCAST WITH FULL INLINE BUTTON LAYOUT -----------------
+async def broadcast_richads(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
 
-async def send_requested_item_direct(
-    update, context, user_id, session, deduct_credit=True
-):
-  item_id = session["id"]
-  item_type = session["type"]
+    if not update.message.reply_to_message:
+        await update.message.reply_text(
+            "⚠️ **उपयोग का तरीका:**\n\n"
+            "जिस भी एड्स या बटन्स वाले मैसेज को सभी को भेजना है, उस पर **Reply** करें और फिर `/sendad` लिखें!",
+            parse_mode="Markdown"
+        )
+        return
 
-  if deduct_credit:
-    await context.bot.send_message(
-        chat_id=user_id,
-        text="⚡ **1 Credit Deducted.** Delivering your content...",
+    reply_msg = update.message.reply_to_message
+    
+    # बटन्स और लेआउट (Inline Markup) को एक्सट्रेक्ट करें
+    extra_markup = reply_msg.reply_markup if reply_msg.reply_markup else None
+
+    all_users = list(users_col.find({}))
+    total_users = len(all_users)
+
+    if total_users == 0:
+        await update.message.reply_text("ℹ️ डेटाबेस में कोई भी यूज़र नहीं मिला।")
+        return
+
+    status_msg = await update.message.reply_text(f"🚀 {total_users} यूज़र्स को बटन्स के साथ ब्रॉडकास्ट भेजा जा रहा है...")
+
+    success = 0
+    failed = 0
+
+    for u in all_users:
+        u_id = u["_id"]
+        try:
+            # exact structure + media + markup को कॉपी करके भेजना
+            await context.bot.copy_message(
+                chat_id=int(u_id),
+                from_chat_id=reply_msg.chat_id,
+                message_id=reply_msg.message_id,
+                reply_markup=extra_markup
+            )
+            success += 1
+            await asyncio.sleep(0.05) # Rate limits से बचने के लिए डिले
+        except Exception as e:
+            print(f"Failed for user {u_id}: {e}")
+            failed += 1
+
+    await status_msg.edit_text(
+        f"✅ **ब्रॉडकास्ट पूरा हुआ!**\n\n"
+        f"👥 कुल यूज़र्स: **{total_users}**\n"
+        f"🎯 सफलतापूर्वक भेजा गया: **{success}**\n"
+        f"❌ नहीं भेजा जा सका (Blocked): **{failed}**",
+        parse_mode="Markdown"
     )
-  else:
-    await context.bot.send_message(
-        chat_id=user_id, text="⚡ Delivering your content..."
-    )
 
-  try:
-    if item_type == "single":
-      doc = files_col.find_one({"_id": item_id})
-      if doc:
-        itype = doc.get("item_type")
-        if itype == "text":
-          await context.bot.send_message(
-              chat_id=user_id,
-              text=f"🔗 **Your Requested Link/Text:**\n\n{doc['text']}",
-          )
-        elif itype == "photo":
-          await context.bot.send_photo(
-              chat_id=user_id,
-              photo=doc["file_id"],
-              caption=doc.get("caption", ""),
-          )
-        elif itype == "video":
-          await context.bot.send_video(
-              chat_id=user_id,
-              video=doc["file_id"],
-              caption=doc.get("caption", ""),
-          )
+# ----------------- HELPER FUNCTIONS -----------------
+async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    if data.startswith("check_fsub_"):
+        param = data.replace("check_fsub_", "")
+        unjoined = await check_force_sub(context.bot, user_id)
+        if unjoined:
+            await query.answer("❌ You haven't joined all channels yet!", show_alert=True)
         else:
-          await context.bot.send_document(
-              chat_id=user_id,
-              document=doc["file_id"],
-              caption=doc.get("caption", ""),
-          )
-    elif item_type == "batch":
-      batch_doc = batch_col.find_one({"_id": item_id})
-      if batch_doc:
-        for f_id in batch_doc["files"]:
-          doc = files_col.find_one({"_id": f_id})
-          if doc:
+            await query.answer("✅ Verified!")
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            context.args = [param] if param and param != "None" else []
+            await start(update, context)
+
+async def send_requested_item_direct(update, context, user_id, session, deduct_credit=True):
+    item_id = session["id"]
+    item_type = session["type"]
+
+    msg_text = "⚡ **1 Credit Deducted.** Delivering content..." if deduct_credit else "⚡ Delivering content..."
+    await context.bot.send_message(chat_id=user_id, text=msg_text)
+
+    try:
+        docs = []
+        if item_type == "single":
+            doc = files_col.find_one({"_id": item_id})
+            if doc: docs.append(doc)
+        elif item_type == "batch":
+            batch_doc = batch_col.find_one({"_id": item_id})
+            if batch_doc:
+                for f_id in batch_doc["files"]:
+                    d = files_col.find_one({"_id": f_id})
+                    if d: docs.append(d)
+
+        for doc in docs:
             itype = doc.get("item_type")
             if itype == "text":
-              await context.bot.send_message(
-                  chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}"
-              )
+                await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}")
             elif itype == "photo":
-              await context.bot.send_photo(
-                  chat_id=user_id,
-                  photo=doc["file_id"],
-                  caption=doc.get("caption", ""),
-              )
+                await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=doc.get("caption", ""))
             elif itype == "video":
-              await context.bot.send_video(
-                  chat_id=user_id,
-                  video=doc["file_id"],
-                  caption=doc.get("caption", ""),
-              )
+                await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=doc.get("caption", ""))
             else:
-              await context.bot.send_document(
-                  chat_id=user_id,
-                  document=doc["file_id"],
-                  caption=doc.get("caption", ""),
-              )
-  except Exception as e:
-    await context.bot.send_message(
-        chat_id=user_id, text=f"❌ Error sending item: {str(e)}"
-    )
+                await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=doc.get("caption", ""))
+    except Exception as e:
+        await context.bot.send_message(chat_id=user_id, text=f"❌ Error: {str(e)}")
 
-  if user_id in user_data:
-    del user_data[user_id]
+    if user_id in user_data:
+        del user_data[user_id]
 
 
+# ----------------- ADMIN COMMANDS -----------------
 async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  status_text = "🟢 ON" if get_ad_status() else "🔴 OFF"
-  await update.message.reply_text(
-      "🛠 **Admin Panel:**\n"
-      "• Send any File, Photo, Video or Web Link to create a link.\n"
-      "• Reply to any message with `/sendad` to broadcast to all users.\n"
-      "• `/batch` - Start/Finish batch.\n"
-      f"• `/togglead` - Turn Ads ON/OFF (Current: {status_text})\n"
-      "• `/addchannel @username`\n"
-      "• `/delchannel @username`\n"
-      "• `/channels`"
-  )
-
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
+    status = "🟢 ON" if get_ad_status() else "🔴 OFF"
+    await update.message.reply_text(
+        "🛠 **Admin Panel:**\n"
+        "• Send Media/Text to generate links.\n"
+        "• Reply to a message with `/sendad` to broadcast (supports buttons).\n"
+        "• `/batch` - Create batch links.\n"
+        f"• `/togglead` - Toggle Ads ({status})\n"
+        "• `/addchannel @username`\n"
+        "• `/delchannel @username`\n"
+        "• `/channels`"
+    )
 
 async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  current = get_ad_status()
-  new_status = not current
-  settings_col.update_one(
-      {"_id": "ad_status"}, {"$set": {"status": new_status}}, upsert=True
-  )
-  state_str = "🟢 ON" if new_status else "🔴 OFF"
-  await update.message.reply_text(f"⚙️ Ad Status updated: {state_str}")
-
+    if not update.effective_user or update.effective_user.id != ADMIN_ID:
+        return
+    new_status = not get_ad_status()
+    settings_col.update_one({"_id": "ad_status"}, {"$set": {"status": new_status}}, upsert=True)
+    await update.message.reply_text(f"⚙️ Ad Status: {'🟢 ON' if new_status else '🔴 OFF'}")
 
 async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  if not context.args:
-    await update.message.reply_text(
-        "⚠️ Use format: `/addchannel @yourchannel` or send channel username/ID",
-        parse_mode="Markdown",
-    )
-    return
-  ch_input = context.args[0]
-  try:
-    chat = await context.bot.get_chat(ch_input)
-    channels_col.update_one(
-        {"_id": chat.id},
-        {
-            "$set": {
-                "title": chat.title,
-                "link": f"https://t.me/{chat.username}" if chat.username else "",
-            }
-        },
-        upsert=True,
-    )
-    await update.message.reply_text(
-        f"✅ Channel **{chat.title}** added successfully!"
-    )
-  except Exception as e:
-    await update.message.reply_text(
-        f"❌ Error adding channel: {str(e)}\nMake sure bot is an admin in that"
-        " channel!"
-    )
-
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    if not context.args: return await update.message.reply_text("⚠️ Use: `/addchannel @channel`")
+    try:
+        chat = await context.bot.get_chat(context.args[0])
+        channels_col.update_one(
+            {"_id": chat.id},
+            {"$set": {"title": chat.title, "link": f"https://t.me/{chat.username}" if chat.username else ""}},
+            upsert=True
+        )
+        await update.message.reply_text(f"✅ Added {chat.title}!")
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error: {e}")
 
 async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  if not context.args:
-    return
-  try:
-    channels_col.delete_one({"_id": int(context.args[0])})
-  except Exception:
-    channels_col.delete_one({"_id": context.args[0]})
-  await update.message.reply_text("✅ Channel removed!")
-
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    if not context.args: return
+    try: channels_col.delete_one({"_id": int(context.args[0])})
+    except: channels_col.delete_one({"_id": context.args[0]})
+    await update.message.reply_text("✅ Channel removed!")
 
 async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  channels = list(channels_col.find())
-  if not channels:
-    await update.message.reply_text("ℹ️ No channels added.")
-    return
-  msg = "📢 **Force Sub Channels:**\n" + "\n".join(
-      [f"- {c.get('title')} (`{c['_id']}`)" for c in channels]
-  )
-  await update.message.reply_text(msg)
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    channels = list(channels_col.find())
+    if not channels: return await update.message.reply_text("ℹ️ No channels.")
+    await update.message.reply_text("📢 Channels:\n" + "\n".join([f"- {c.get('title')}" for c in channels]))
 
+async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    msg = update.message
+    if not msg: return
 
-async def handle_admin_content(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  msg = update.message
-  if not msg:
-    return
+    unique_id = str(uuid.uuid4())[:8]
+    item_type, file_id = "text", None
 
-  unique_id = str(uuid.uuid4())[:8]
-  item_type = "text"
-  file_id = None
-  caption = msg.caption or ""
-  text_content = msg.text
+    if msg.document: item_type, file_id = "file", msg.document.file_id
+    elif msg.video: item_type, file_id = "video", msg.video.file_id
+    elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+    elif msg.text and not msg.text.startswith("/"): item_type = "text"
+    else: return
 
-  if msg.document:
-    item_type = "file"
-    file_id = msg.document.file_id
-  elif msg.video:
-    item_type = "video"
-    file_id = msg.video.file_id
-  elif msg.photo:
-    item_type = "photo"
-    file_id = msg.photo[-1].file_id
-  elif text_content and not text_content.startswith("/"):
-    item_type = "text"
-  else:
-    return
+    files_col.insert_one({
+        "_id": unique_id, "item_type": item_type, "file_id": file_id,
+        "caption": msg.caption or "", "text": msg.text if item_type == "text" else ""
+    })
 
-  files_col.insert_one({
-      "_id": unique_id,
-      "item_type": item_type,
-      "file_id": file_id,
-      "caption": caption,
-      "text": text_content if item_type == "text" else "",
-  })
-
-  if context.user_data.get("in_batch"):
-    context.user_data["batch_files"].append(unique_id)
-    await msg.reply_text(
-        "✅ Item added to batch! (Total:"
-        f" {len(context.user_data['batch_files'])})"
-    )
-  else:
-    share_link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
-    await msg.reply_text(
-        f"✅ **Link Generated Successfully!**\n\n🔗 **Shareable Link:**\n`{share_link}`",
-        parse_mode="Markdown",
-    )
-
+    if context.user_data.get("in_batch"):
+        context.user_data["batch_files"].append(unique_id)
+        await msg.reply_text(f"✅ Added to batch ({len(context.user_data['batch_files'])})")
+    else:
+        await msg.reply_text(f"✅ Link Generated:\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
 
 async def start_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
-  if not update.effective_user or update.effective_user.id != ADMIN_ID:
-    return
-  if context.user_data.get("in_batch"):
-    files_list = context.user_data.get("batch_files", [])
-    if not files_list:
-      await update.message.reply_text("⚠️ Batch is empty!")
-      return
-    batch_id = f"batch_{str(uuid.uuid4())[:8]}"
-    batch_col.insert_one({"_id": batch_id, "files": files_list})
-    context.user_data["in_batch"] = False
-    context.user_data["batch_files"] = []
-    batch_link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
-    await update.message.reply_text(
-        f"🎉 **Batch Link Created!**\n\n🔗 **Batch Link:**\n`{batch_link}`",
-        parse_mode="Markdown",
-    )
-  else:
-    context.user_data["in_batch"] = True
-    context.user_data["batch_files"] = []
-    await update.message.reply_text(
-        "📦 **Batch Mode Started!** Send items, then type `/batch` again."
-    )
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    if context.user_data.get("in_batch"):
+        if not context.user_data.get("batch_files"): return await update.message.reply_text("⚠️ Batch empty!")
+        batch_id = f"batch_{str(uuid.uuid4())[:8]}"
+        batch_col.insert_one({"_id": batch_id, "files": context.user_data["batch_files"]})
+        context.user_data["in_batch"] = False
+        await update.message.reply_text(f"🎉 Batch Link:\n`https://t.me/{BOT_USERNAME}?start={batch_id}`", parse_mode="Markdown")
+    else:
+        context.user_data["in_batch"] = True
+        context.user_data["batch_files"] = []
+        await update.message.reply_text("📦 Batch Mode Started! Send items, then /batch")
 
-
+# ----------------- MAIN BOOT -----------------
 if __name__ == "__main__":
-  print("🚀 Starting Bot on Cloud/Render...")
-  app = (
-      ApplicationBuilder()
-      .token(TOKEN)
-      .connect_timeout(30.0)
-      .read_timeout(30.0)
-      .write_timeout(30.0)
-      .build()
-  )
+    app = ApplicationBuilder().token(TOKEN).connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0).build()
+    
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("sendad", broadcast_richads))
+    app.add_handler(CommandHandler("batch", start_batch))
+    app.add_handler(CommandHandler("admin", admin_help))
+    app.add_handler(CommandHandler("togglead", toggle_ad))
+    app.add_handler(CommandHandler("addchannel", add_channel))
+    app.add_handler(CommandHandler("delchannel", del_channel))
+    app.add_handler(CommandHandler("channels", list_channels))
+    app.add_handler(CallbackQueryHandler(fsub_callback, pattern="^check_fsub_"))
+    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_content))
 
-  app.add_handler(CommandHandler("start", start))
-  app.add_handler(CommandHandler("sendad", broadcast_richads))
-  app.add_handler(CommandHandler("batch", start_batch))
-  app.add_handler(CommandHandler("admin", admin_help))
-  app.add_handler(CommandHandler("togglead", toggle_ad))
-  app.add_handler(CommandHandler("addchannel", add_channel))
-  app.add_handler(CommandHandler("delchannel", del_channel))
-  app.add_handler(CommandHandler("channels", list_channels))
-  app.add_handler(CallbackQueryHandler(fsub_callback, pattern="^check_fsub_"))
-  app.add_handler(
-      MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_content)
-  )
-
-  print("✅ Bot is online and polling...")
-  app.run_polling()
+    print("✅ Bot is polling...")
+    app.run_polling()
