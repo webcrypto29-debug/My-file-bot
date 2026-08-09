@@ -112,38 +112,51 @@
       document.getElementById('statusText').innerText = "Ready! Click above to watch.";
     });
 
+    function redirectToBot() {
+      const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
+      if (tg && tg.openTelegramLink) {
+        tg.openTelegramLink(redirectUrl);
+      } else {
+        window.location.href = redirectUrl;
+      }
+      if (tg) {
+        setTimeout(() => tg.close(), 500);
+      }
+    }
+
     function triggerAd() {
       const btn = document.getElementById('adBtn');
       const status = document.getElementById('statusText');
 
+      btn.disabled = true;
+
+      // Check if Monetag SDK is loaded
       if (typeof show_8981394 !== 'function') {
-        status.innerText = "Ad Provider loading... Please wait 3 seconds.";
+        status.innerText = "Ad Network bypass triggered... Redirecting!";
+        // SDK nahi mila to user ko 1.5sec me auto-redirect kar do taaki stuck na ho
+        setTimeout(() => {
+          redirectToBot();
+        }, 1500);
         return;
       }
 
-      btn.disabled = true;
       status.innerText = "Loading Ad...";
 
       // Trigger Monetag Rewarded Ad
       show_8981394()
         .then(() => {
           status.innerText = "Ad Finished! Redirecting to Bot...";
-          
-          // Redirect back to Telegram Bot with Verification Parameter
           setTimeout(() => {
-            const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
-            if (tg && tg.openTelegramLink) {
-              tg.openTelegramLink(redirectUrl);
-            } else {
-              window.location.href = redirectUrl;
-            }
-            if (tg) tg.close();
+            redirectToBot();
           }, 1000);
         })
         .catch((err) => {
           console.error("Ad error or closed:", err);
-          status.innerText = "Ad was closed or failed. Please try again.";
-          btn.disabled = false;
+          status.innerText = "Bypassing Ad... Redirecting to Bot!";
+          // Agar Ad fail bhi ho jaye ya Ad Blocker ho, tab bhi user redirect ho jayega
+          setTimeout(() => {
+            redirectToBot();
+          }, 1200);
         });
     }
   </script>
