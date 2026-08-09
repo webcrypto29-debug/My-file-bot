@@ -1,156 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Unlock Your File</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watch Ad to Unlock File</title>
 
-  <!-- Telegram Web App SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!-- Telegram WebApp SDK -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-  <!-- Monetag In-App SDK -->
-  <script src='//ks313.com/sdk.js' data-zone='8981394' data-sdk='show_8981394'></script>
+    <!-- Monetag Rewarded SDK -->
+    <script src='//libtl.com/sdk.js' data-zone='11452552' data-sdk='show_11452552'></script>
 
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body {
-      background-color: #0f172a;
-      color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      padding: 20px;
-    }
-    .card {
-      background: #1e293b;
-      padding: 28px 24px;
-      border-radius: 16px;
-      text-align: center;
-      max-width: 320px;
-      width: 100%;
-      border: 1px solid #334155;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-    }
-    .icon {
-      font-size: 50px;
-      margin-bottom: 12px;
-    }
-    h2 {
-      font-size: 20px;
-      margin-bottom: 8px;
-    }
-    p {
-      font-size: 14px;
-      color: #94a3b8;
-      margin-bottom: 24px;
-      line-height: 1.4;
-    }
-    .btn {
-      background: linear-gradient(135deg, #2563eb, #1d4ed8);
-      color: white;
-      border: none;
-      padding: 15px;
-      font-size: 16px;
-      font-weight: 600;
-      border-radius: 12px;
-      cursor: pointer;
-      width: 100%;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-      transition: all 0.2s ease;
-    }
-    .btn:active {
-      transform: scale(0.98);
-    }
-    .btn:disabled {
-      background: #475569 !important;
-      cursor: not-allowed;
-      box-shadow: none !important;
-    }
-    .btn-success {
-      background: linear-gradient(135deg, #16a34a, #15803d) !important;
-      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
-    }
-  </style>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        .card {
+            background-color: #1e293b;
+            padding: 30px 20px;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+            max-width: 350px;
+            width: 100%;
+        }
+        h2 {
+            margin-top: 0;
+            font-size: 22px;
+        }
+        p {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-bottom: 25px;
+        }
+        .btn {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            width: 100%;
+            transition: background 0.2s;
+        }
+        .btn:active {
+            background-color: #1d4ed8;
+        }
+    </style>
 </head>
 <body>
 
-  <div class="card">
-    <div class="icon" id="cardIcon">🎁</div>
-    <h2 id="cardTitle">Unlock Your File</h2>
-    <p id="cardDesc">Watch a short rewarded ad to automatically unlock your file in Telegram.</p>
+    <div class="card">
+        <h2>🔒 Unlock Your Content</h2>
+        <p>Watch a short ad completely to get <b>+3 Credits</b> and auto-download your file.</p>
+        <button class="btn" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
+    </div>
 
-    <button id="mainBtn" class="btn" onclick="handleAdProcess()">Watch Ad to Unlock</button>
-  </div>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Mini App को फुल स्क्रीन मोड में खोलें
 
-  <script>
-    const BOT_USERNAME = "MyFile727_bot";
-    const tg = window.Telegram ? window.Telegram.WebApp : null;
-
-    if (tg) {
-      tg.ready();
-      tg.expand();
-    }
-
-    let isAdCompleted = false;
-
-    function handleAdProcess() {
-      const btn = document.getElementById('mainBtn');
-      const title = document.getElementById('cardTitle');
-      const desc = document.getElementById('cardDesc');
-      const icon = document.getElementById('cardIcon');
-
-      // STEP 2: "Get Files" पर क्लिक करने पर Telegram में वेरिफिकेशन डायरेक्ट भेजना
-      if (isAdCompleted) {
-        const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
-        if (tg && tg.openTelegramLink) {
-          tg.openTelegramLink(redirectUrl);
-        } else {
-          window.location.href = redirectUrl;
+        function watchAd() {
+            // Check if Monetag SDK is loaded
+            if (typeof show_11452552 === 'function') {
+                show_11452552().then(() => {
+                    // Ad पूरा देखने के बाद Telegram Bot पर वापस भेजें
+                    window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
+                }).catch((err) => {
+                    alert("Ad skipped or failed to complete. Please watch full ad to unlock!");
+                });
+            } else {
+                alert("Ad provider is still loading or blocked. Please wait 2 seconds, check your internet, or disable any Ad-Blocker/Private DNS!");
+            }
         }
-        if (tg) {
-          setTimeout(() => tg.close(), 300);
-        }
-        return;
-      }
+    </script>
 
-      // STEP 1: Monetag Rewarded Ad ट्रिगर करना
-      if (typeof show_8981394 === 'function') {
-        btn.disabled = true;
-        btn.innerText = "Loading Ad...";
-
-        show_8981394()
-          .then(() => {
-            // एड पूरा देखने और (X) दबाने के बाद:
-            btn.innerText = "Verifying Ad...";
-            
-            // 3 सेकंड का डिले ताकि Bot Side पर 14s टाइम चेकिंग 'Verification Failed' न करे
-            setTimeout(() => {
-              isAdCompleted = true;
-              icon.innerText = "🎉";
-              title.innerText = "Ad Completed!";
-              desc.innerText = "Your ad watch is verified. Click below to get your files.";
-              btn.disabled = false;
-              btn.innerText = "Get Files 🚀";
-              btn.className = "btn btn-success";
-            }, 3000);
-          })
-          .catch((err) => {
-            console.error("Ad failed or closed:", err);
-            // एड बंद या एरर आने पर बटन को वापस रीसेट करें
-            btn.disabled = false;
-            btn.innerText = "Watch Ad to Unlock";
-            alert("Please watch the full ad to unlock your file!");
-          });
-      } else {
-        alert("Ad provider not loaded yet. Please check internet or disable ad-blocker.");
-      }
-    }
-  </script>
 </body>
 </html>
