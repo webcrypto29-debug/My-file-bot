@@ -62,6 +62,7 @@
       cursor: pointer;
       width: 100%;
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      transition: all 0.2s ease;
     }
     .btn:active {
       transform: scale(0.98);
@@ -77,10 +78,9 @@
   <div class="card">
     <div class="icon" id="cardIcon">🎁</div>
     <h2 id="cardTitle">Unlock Your File</h2>
-    <p id="cardDesc">Watch a short ad to automatically unlock your file in Telegram.</p>
+    <p id="cardDesc">Watch a short rewarded ad to automatically unlock your file in Telegram.</p>
 
-    <!-- डायरेक्ट ऐक्शन बटन (कोई फालतू लोडिंग टेक्स्ट नहीं) -->
-    <button id="mainBtn" class="btn" onclick="handleAdClick()">Watch Ad to Unlock</button>
+    <button id="mainBtn" class="btn" onclick="handleAdProcess()">Watch Ad to Unlock</button>
   </div>
 
   <script>
@@ -92,52 +92,52 @@
       tg.expand();
     }
 
-    let isAdFinished = false;
+    let isAdCompleted = false;
 
-    function finishAndRedirect() {
-      const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
-      if (tg && tg.openTelegramLink) {
-        tg.openTelegramLink(redirectUrl);
-      } else {
-        window.location.href = redirectUrl;
-      }
-      if (tg) {
-        setTimeout(() => tg.close(), 300);
-      }
-    }
-
-    function handleAdClick() {
+    function handleAdProcess() {
       const btn = document.getElementById('mainBtn');
       const title = document.getElementById('cardTitle');
       const desc = document.getElementById('cardDesc');
       const icon = document.getElementById('cardIcon');
 
-      // अगर एड पहले ही देखा जा चुका है और यूज़र "Get File" दबाता है:
-      if (isAdFinished) {
-        finishAndRedirect();
+      // STEP 2: जब यूजर ऐड देखकर 'Get Files' बटन पर क्लिक करेगा
+      if (isAdCompleted) {
+        const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
+        if (tg && tg.openTelegramLink) {
+          tg.openTelegramLink(redirectUrl);
+        } else {
+          window.location.href = redirectUrl;
+        }
+        if (tg) {
+          setTimeout(() => tg.close(), 300);
+        }
         return;
       }
 
-      // Monetag In-App SDK ट्रिगर चेक
+      // STEP 1: Monetag Ad ट्रिगर करना
       if (typeof show_8981394 === 'function') {
         show_8981394()
           .then(() => {
-            // एड पूरा देखने के बाद
-            isAdFinished = true;
-            icon.innerText = "✅";
-            title.innerText = "Ad Completed!";
-            desc.innerText = "Click below to claim your file inside Telegram.";
+            // जैसे ही यूजर ऐड पूरा देखकर क्रॉस (X) बटन दबाएगा:
+            isAdCompleted = true;
+            icon.innerText = "🎉";
+            title.innerText = "Task Completed!";
+            desc.innerText = "Your ad verification is successful. Click below to get your file.";
             btn.innerText = "Get Files 🚀";
             btn.className = "btn btn-success";
           })
           .catch((err) => {
-            console.error("Ad failed or closed:", err);
-            // एड फेल होने पर भी यूज़र को सीधे रिडायरेक्ट करने का ऑप्शन दो
-            finishAndRedirect();
+            console.error("Ad error or closed early:", err);
+            // अगर एड किसी वजह से फेल हो, तो भी यूजर फंसे न
+            isAdCompleted = true;
+            btn.innerText = "Get Files 🚀";
+            btn.className = "btn btn-success";
           });
       } else {
-        // अगर ब्राउज़र या एड-ब्लॉकर की वजह से Monetag SDK लोड नहीं हुआ
-        finishAndRedirect();
+        // SDK न मिलने पर डायरेक्ट गेट फाइल्स इनेबल करना
+        isAdCompleted = true;
+        btn.innerText = "Get Files 🚀";
+        btn.className = "btn btn-success";
       }
     }
   </script>
