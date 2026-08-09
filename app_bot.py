@@ -1,23 +1,15 @@
-import asyncio
-import json
 import os
-import re
-import threading
 import time
+import asyncio
+import threading
 import urllib.request
-import uuid
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
-import dns.resolver
+import json
 import pymongo
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, WebAppInfo
+import dns.resolver
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
-    ApplicationBuilder,
-    CallbackQueryHandler,
-    CommandHandler,
-    ContextTypes,
-    MessageHandler,
-    filters,
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
 )
 
 # ----------------- SERVER KEEP-ALIVE -----------------
@@ -37,10 +29,10 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Termux / Hosting DNS Fix
+# Termux DNS Fix
 try:
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
-    dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
+    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
 except Exception:
     pass
 
@@ -51,10 +43,6 @@ BOT_USERNAME = "MyFile727_bot"
 
 MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
 ADMIN_ID = 5911965767
-AUTO_DELETE_SECONDS = 120  # 2 Minutes Auto-Delete
-
-# Database Channel ID (Make sure bot is admin in your DB channel)
-DB_CHANNEL_ID = -1002233445566  # Replace with your exact DB channel ID if needed
 # --------------------------------------------------
 
 # MongoDB Setup
@@ -88,15 +76,6 @@ async def check_force_sub(bot, user_id):
         except Exception:
             pass
     return unjoined
-
-# ----------------- AUTO DELETE TASK -----------------
-async def delete_message_after_delay(bot, chat_id, message_ids, delay):
-    await asyncio.sleep(delay)
-    for msg_id in message_ids:
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
-        except Exception:
-            pass
 
 # ----------------- MAIN START HANDLER -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,7 +114,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_reply(
             "⚠️ **Must Join Channels!**\n\nTo access files/links, please join our required channels first:",
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="Markdown",
+            parse_mode="Markdown"
         )
         return
 
@@ -156,7 +135,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if time_elapsed < 14:
             await safe_reply(
                 "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed properly or finished too quickly. Please watch the ad fully.",
-                parse_mode="Markdown",
+                parse_mode="Markdown"
             )
             return
 
@@ -167,7 +146,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await safe_reply(
             f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_balance} Credits**",
-            parse_mode="Markdown",
+            parse_mode="Markdown"
         )
 
         if new_balance >= 1:
@@ -186,7 +165,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "type": "batch" if batch_doc else "single",
                 "id": param,
                 "verified": False,
-                "click_time": time.time(),
+                "click_time": time.time()
             }
             user_data[user_id] = session_info
 
@@ -199,7 +178,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_requested_item_direct(update, context, user_id, session_info, deduct_credit=True)
                 return
 
-            keyboard = [[InlineKeyboardButton("Watch Ad Now  🚀", web_app=WebAppInfo(url=MINI_APP_URL))]]
+            keyboard = [[InlineKeyboardButton("Watch Ad Now 🚀", web_app=WebAppInfo(url=MINI_APP_URL))]]
             await safe_reply(
                 f"🔒 **File Locked!**\n\n💰 Your Credits: **{current_credits}**\n\n👇 Click below to watch a short ad. You will get **+3 Credits** and your file instantly!",
                 reply_markup=InlineKeyboardMarkup(keyboard),
@@ -213,145 +192,57 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 4. Normal Start
     await safe_reply(
         f"👋 Welcome!\n\n💰 Your Current Balance: **{current_credits} Credits**\nClick any file link to download content!",
-        parse_mode="Markdown",
+        parse_mode="Markdown"
     )
 
-# ----------------- FILE DELIVERY WITH 2-MIN AUTO DELETE -----------------
+# ----------------- DIRECT FILE DELIVERY -----------------
 async def send_requested_item_direct(update, context, user_id, session, deduct_credit=True):
     item_id = session["id"]
     item_type = session["type"]
 
-    msg_text = "⚡ **1 Credit Deducted.** Delivering content..." if deduct_credit else "⚡ Delivering content..."
-    info_msg = await context.bot.send_message(chat_id=user_id, text=msg_text)
-
-    sent_message_ids = [info_msg.message_id]
+    if deduct_credit:
+        await context.bot.send_message(chat_id=user_id, text="⚡ **1 Credit Deducted.** Delivering content...", parse_mode="Markdown")
 
     try:
-        docs = []
         if item_type == "single":
             doc = files_col.find_one({"_id": item_id})
-            if doc: docs.append(doc)
+            if doc:
+                itype = doc.get("item_type")
+                cap = doc.get("caption", "")
+                if itype == "text":
+                    await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}")
+                elif itype == "photo":
+                    await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=cap)
+                elif itype == "video":
+                    await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=cap)
+                else:
+                    await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap)
+
         elif item_type == "batch":
             batch_doc = batch_col.find_one({"_id": item_id})
             if batch_doc:
                 for f_id in batch_doc["files"]:
-                    d = files_col.find_one({"_id": f_id})
-                    if d: docs.append(d)
-
-        for doc in docs:
-            itype = doc.get("item_type")
-            cap = (doc.get("caption", "") or "") + "\n\n⚠️ **This file will be automatically deleted in 2 minutes! Forward it to Saved Messages now.**"
-
-            if itype == "text":
-                sent = await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}\n\n⚠️ **Deletes in 2 minutes!**")
-            elif itype == "photo":
-                sent = await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=cap, parse_mode="Markdown")
-            elif itype == "video":
-                sent = await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=cap, parse_mode="Markdown")
-            else:
-                sent = await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap, parse_mode="Markdown")
-            
-            if sent:
-                sent_message_ids.append(sent.message_id)
-
-        # Trigger background auto-delete timer
-        asyncio.create_task(delete_message_after_delay(context.bot, user_id, sent_message_ids, AUTO_DELETE_SECONDS))
+                    doc = files_col.find_one({"_id": f_id})
+                    if doc:
+                        itype = doc.get("item_type")
+                        cap = doc.get("caption", "")
+                        if itype == "text":
+                            await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}")
+                        elif itype == "photo":
+                            await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=cap)
+                        elif itype == "video":
+                            await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=cap)
+                        else:
+                            await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap)
+                        await asyncio.sleep(0.5)
 
     except Exception as e:
-        await context.bot.send_message(chat_id=user_id, text=f"❌ Error: {str(e)}")
+        await context.bot.send_message(chat_id=user_id, text=f"❌ Error delivering file: {str(e)}")
 
     if user_id in user_data:
         del user_data[user_id]
 
-# ----------------- DATABASE CHANNEL AUTO-SAVER -----------------
-async def handle_db_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.channel_post
-    if not msg:
-        return
-
-    unique_id = str(uuid.uuid4())[:8]
-    item_type, file_id = "text", None
-
-    if msg.document: item_type, file_id = "file", msg.document.file_id
-    elif msg.video: item_type, file_id = "video", msg.video.file_id
-    elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-    elif msg.text: item_type = "text"
-    else: return
-
-    caption_text = msg.caption or msg.text or "File Link"
-
-    files_col.insert_one({
-        "_id": unique_id,
-        "item_type": item_type,
-        "file_id": file_id,
-        "caption": caption_text,
-        "text": msg.text if item_type == "text" else "",
-        "created_at": time.time()
-    })
-
-# ----------------- GROUP SEARCH & HYPERLINK FORMATTER (FIXED) -----------------
-async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or not msg.text or msg.text.startswith("/"):
-        return
-
-    if msg.chat.type not in ["group", "supergroup"]:
-        return
-
-    start_time = time.time()
-    query_text = msg.text.strip()
-    if len(query_text) < 2:
-        return
-
-    regex_pattern = re.compile(re.escape(query_text), re.IGNORECASE)
-    results = list(files_col.find({
-        "$or": [
-            {"caption": {"$regex": regex_pattern}},
-            {"text": {"$regex": regex_pattern}}
-        ]
-    }).limit(10))
-
-    user = msg.from_user
-    user_name = user.first_name if user else "User"
-
-    if results:
-        elapsed = round(time.time() - start_time, 2)
-        
-        # HTML Parse Mode Formatting for clean look
-        response = (
-            f"🏷 <b>TITLE :</b> {query_text}\n"
-            f"📦 <b>TOTAL FILES :</b> {len(results)}\n"
-            f"⏰ <b>RESULT IN :</b> {elapsed} SECONDS\n\n"
-            f"📝 <b>REQUESTED BY :</b> {user_name}\n"
-            f"⚜️ <b>POWERED BY :</b> @{BOT_USERNAME}\n\n"
-            f"<u><b>Your Requested Files Are Here</b></u>\n\n"
-        )
-
-        for idx, file_item in enumerate(results, start=1):
-            title = file_item.get("caption") or file_item.get("text") or "Download File"
-            clean_title = title.replace("\n", " ").strip()
-            if len(clean_title) > 60:
-                clean_title = clean_title[:57] + "..."
-            
-            bot_link = f"https://t.me/{BOT_USERNAME}?start={file_item['_id']}"
-            response += f"<b>{idx}.</b> <a href='{bot_link}'>{clean_title}</a>\n\n"
-
-        sent_group_msg = await msg.reply_text(
-            response, 
-            parse_mode="HTML", 
-            disable_web_page_preview=True
-        )
-
-        # 2-Minute Auto Delete for Group Message
-        asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
-    else:
-        sent_group_msg = await msg.reply_text(
-            f"❌ <b>File Not Found!</b>\n\nYour request for <code>{query_text}</code> has been logged.",
-            parse_mode="HTML"
-        )
-        asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
-
-# ----------------- HELPER FUNCTIONS -----------------
+# ----------------- CALLBACK HANDLER -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -361,22 +252,225 @@ async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         param = data.replace("check_fsub_", "")
         unjoined = await check_force_sub(context.bot, user_id)
         if unjoined:
-            await query.answer("❌ You haven't joined all channels yet!", show_alert=True)
+            await query.answer("❌ You haven't joined all required channels yet!", show_alert=True)
         else:
-            await query.answer("✅ Verified!")
+            await query.answer("✅ Verification successful!")
             try:
                 await query.message.delete()
             except Exception:
                 pass
-            context.args = [param] if param and param != "None" else []
+            context.args = [param] if param != "None" else []
             await start(update, context)
 
-# ----------------- ADMIN COMMANDS & STATS -----------------
+# ----------------- ADMIN COMMANDS -----------------
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    text = (
+        "🛠 **Admin Commands Guide:**\n\n"
+        "🔗 `/genlink` - Reply to any media/text to generate a share link.\n"
+        "📦 `/batch` - Start/Stop batching multiple files into one link.\n"
+        "📢 `/sendad` - Reply to a message to broadcast to all users.\n"
+        "🛑 `/stopbroadcast` - Stop ongoing broadcast.\n"
+        "🗑 `/deletebroadcast` - Reply to broadcast to delete from users' PM.\n"
+        "➕ `/addchannel <id> <link> <title>` - Add Force Sub Channel.\n"
+        "➖ `/delchannel <id>` - Remove Force Sub Channel.\n"
+        "📑 `/channels` - List all Force Sub Channels.\n"
+        "🔘 `/togglead` - Enable/Disable Ads Mode.\n"
+        "📊 `/stats` - View total users and files."
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    current = get_ad_status()
+    new_status = not current
+    settings_col.update_one({"_id": "ad_status"}, {"$set": {"status": new_status}}, upsert=True)
+    status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
+    await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
+
+async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    msg = update.message.reply_to_message
+    if not msg:
+        await update.message.reply_text("⚠️ Reply to a message/media to generate a link!")
+        return
+
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
+    item_type, file_id = "text", None
+
+    if msg.document: item_type, file_id = "file", msg.document.file_id
+    elif msg.video: item_type, file_id = "video", msg.video.file_id
+    elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+    elif msg.text: item_type = "text"
+
+    files_col.insert_one({
+        "_id": unique_id,
+        "item_type": item_type,
+        "file_id": file_id,
+        "caption": msg.caption or "",
+        "text": msg.text or ""
+    })
+
+    link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
+    await update.message.reply_text(f"✅ **Single File Link Generated:**\n{link}", parse_mode="Markdown")
+
+# --- BATCH SYSTEM ---
+batch_sessions = {}
+
+async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    admin_id = update.effective_user.id
+
+    if admin_id in batch_sessions:
+        files = batch_sessions[admin_id]
+        if not files:
+            del batch_sessions[admin_id]
+            await update.message.reply_text("❌ Batch Mode cancelled (no files added).")
+            return
+
+        import uuid
+        batch_id = str(uuid.uuid4())[:8]
+        batch_col.insert_one({"_id": batch_id, "files": files})
+        del batch_sessions[admin_id]
+
+        link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
+        await update.message.reply_text(f"🎉 **Batch Created ({len(files)} files)!**\n\nLink: {link}", parse_mode="Markdown")
+    else:
+        batch_sessions[admin_id] = []
+        await update.message.reply_text(
+            "📦 **Batch Mode Started!**\n\nSend/Forward all files you want to include in this batch.\nWhen finished, type `/batch` again to generate the link.",
+            parse_mode="Markdown"
+        )
+
+async def handle_admin_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or msg.from_user.id != ADMIN_ID: return
+    if msg.from_user.id not in batch_sessions: return
+
+    import uuid
+    unique_id = str(uuid.uuid4())[:8]
+    item_type, file_id = "text", None
+
+    if msg.document: item_type, file_id = "file", msg.document.file_id
+    elif msg.video: item_type, file_id = "video", msg.video.file_id
+    elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+    elif msg.text: item_type = "text"
+
+    files_col.insert_one({
+        "_id": unique_id,
+        "item_type": item_type,
+        "file_id": file_id,
+        "caption": msg.caption or "",
+        "text": msg.text or ""
+    })
+
+    batch_sessions[msg.from_user.id].append(unique_id)
+    count = len(batch_sessions[msg.from_user.id])
+    await update.message.reply_text(f"➕ Added file #{count} to Batch.")
+
+# --- BROADCAST SYSTEM ---
+async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    msg = update.message.reply_to_message
+    if not msg:
+        await update.message.reply_text("⚠️ Reply to a message to broadcast!")
+        return
+
+    broadcast_control["is_running"] = True
+    users = list(users_col.find())
+    total = len(users)
+    success, failed = 0, 0
+    broadcast_id = str(int(time.time()))
+    sent_details = []
+
+    status_msg = await update.message.reply_text(f"🚀 Broadcast started to {total} users...")
+
+    for u in users:
+        if not broadcast_control["is_running"]:
+            await update.message.reply_text("🛑 Broadcast stopped manually.")
+            break
+        u_id = u["_id"]
+        try:
+            sent = await msg.copy(chat_id=u_id)
+            sent_details.append({"user_id": u_id, "message_id": sent.message_id})
+            success += 1
+        except Exception:
+            failed += 1
+        await asyncio.sleep(0.05)
+
+    broadcast_history_col.insert_one({"_id": broadcast_id, "sent_details": sent_details})
+    broadcast_control["is_running"] = False
+    await status_msg.edit_text(f"✅ **Broadcast Completed!**\n🆔 ID: `{broadcast_id}`\n🎯 Success: {success}\n❌ Failed: {failed}", parse_mode="Markdown")
+
+async def stop_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    broadcast_control["is_running"] = False
+    await update.message.reply_text("🛑 Stopping broadcast process...")
+
+async def delete_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ Usage: `/deletebroadcast <broadcast_id>`", parse_mode="Markdown")
+        return
+    b_id = args[0]
+    record = broadcast_history_col.find_one({"_id": b_id})
+    if not record:
+        await update.message.reply_text("❌ Broadcast ID not found!")
+        return
+
+    del_success = 0
+    for item in record.get("sent_details", []):
+        try:
+            await context.bot.delete_message(chat_id=item["user_id"], message_id=item["message_id"])
+            del_success += 1
+        except Exception:
+            pass
+        await asyncio.sleep(0.03)
+
+    broadcast_history_col.delete_one({"_id": b_id})
+    await update.message.reply_text(f"🗑 Deleted {del_success} broadcast messages.")
+
+# --- FORCE SUB SYSTEM ---
+async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if len(args) < 3:
+        await update.message.reply_text("⚠️ Usage: `/addchannel <channel_id_or_username> <link> <title>`", parse_mode="Markdown")
+        return
+    ch_id = int(args[0]) if args[0].replace("-", "").isdigit() else args[0]
+    channels_col.update_one({"_id": ch_id}, {"$set": {"link": args[1], "title": " ".join(args[2:])}}, upsert=True)
+    await update.message.reply_text("✅ Force Sub Channel added/updated successfully!")
+
+async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ Usage: `/delchannel <channel_id_or_username>`", parse_mode="Markdown")
+        return
+    ch_id = int(args[0]) if args[0].replace("-", "").isdigit() else args[0]
+    channels_col.delete_one({"_id": ch_id})
+    await update.message.reply_text("✅ Force Sub Channel removed!")
+
+async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    chs = list(channels_col.find())
+    if not chs:
+        await update.message.reply_text("📑 No Force Sub channels active.")
+        return
+    text = "📢 **Active Force Sub Channels:**\n\n"
+    for c in chs:
+        text += f"• `{c['_id']}` | [{c.get('title', 'Channel')}]({c.get('link')})\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    if update.effective_user.id != ADMIN_ID: return
     total_users = users_col.count_documents({})
     total_files = files_col.count_documents({})
-    await update.message.reply_text(f"📊 **Bot Stats:**\n👥 Users: **{total_users}**\n📁 Files: **{total_files}**", parse_mode="Markdown")
+    total_batches = batch_col.count_documents({})
+    await update.message.reply_text(f"📊 **Stats:**\n👥 Users: {total_users}\n📁 Files: {total_files}\n📦 Batches: {total_batches}")
 
 # ----------------- MAIN APP INITIALIZATION -----------------
 def main():
@@ -384,25 +478,12 @@ def main():
 
     # Commands
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("stats", stats_command))
-
-    # Callbacks
-    app.add_handler(CallbackQueryHandler(fsub_callback))
-
-    # Database Channel Listener
-    app.add_handler(MessageHandler(
-        filters.ChatType.CHANNEL,
-        handle_db_channel_post
-    ))
-
-    # Group Search Handler
-    app.add_handler(MessageHandler(
-        filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS,
-        handle_group_search
-    ))
-
-    print("🤖 Bot is starting cleanly...")
-    app.run_polling()
-
-if __name__ == "__main__":
-    main()
+    app.add_handler(CommandHandler("admin", admin_panel))
+    app.add_handler(CommandHandler("togglead", toggle_ad))
+    app.add_handler(CommandHandler("genlink", genlink))
+    app.add_handler(CommandHandler("batch", batch_command))
+    app.add_handler(CommandHandler("sendad", send_ad))
+    app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
+    app.add_handler(CommandHandler("deletebroadcast", delete_broadcast))
+    app.add_handler(CommandHandler("addchannel", add_channel))
+    app.add_handler(CommandHandler(
