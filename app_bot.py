@@ -486,4 +486,16 @@ def main():
     app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
     app.add_handler(CommandHandler("deletebroadcast", delete_broadcast))
     app.add_handler(CommandHandler("addchannel", add_channel))
-    app.add_handler(CommandHandler(
+    app.add_handler(CommandHandler("delchannel", del_channel))
+    app.add_handler(CommandHandler("channels", list_channels))
+    app.add_handler(CommandHandler("stats", stats_command))
+
+    # Callbacks & Messages
+    app.add_handler(CallbackQueryHandler(fsub_callback))
+    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_admin_media))
+
+    print("🤖 Bot is starting...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
