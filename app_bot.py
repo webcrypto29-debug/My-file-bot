@@ -50,6 +50,7 @@ BOT_USERNAME = "MyFile727_bot"
 
 MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
 ADMIN_ID = 5911965767
+AUTO_DELETE_SECONDS = 120  # 2 Minutes Auto-Delete
 # --------------------------------------------------
 
 # MongoDB Setup
@@ -83,6 +84,15 @@ async def check_force_sub(bot, user_id):
         except Exception:
             pass
     return unjoined
+
+# ----------------- AUTO DELETE TASK -----------------
+async def delete_message_after_delay(bot, chat_id, message_ids, delay):
+    await asyncio.sleep(delay)
+    for msg_id in message_ids:
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except Exception:
+            pass
 
 # ----------------- MAIN START HANDLER -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -198,10 +208,56 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 4. Normal Start
     await safe_reply(
-        f"👋 Welcome!\n\n💰 Your Current Balance: **{current_credits} Credits**\nSend or click any share link to get files!",
+        f"👋 Welcome!\n\n💰 Your Current Balance: **{current_credits} Credits**\nClick any file link to download content!",
         parse_mode="Markdown",
     )
 
+# ----------------- FILE DELIVERY WITH 2-MIN AUTO DELETE -----------------
+async def send_requested_item_direct(update, context, user_id, session, deduct_credit=True):
+    item_id = session["id"]
+    item_type = session["type"]
+
+    msg_text = "⚡ **1 Credit Deducted.** Delivering content..." if deduct_credit else "⚡ Delivering content..."
+    info_msg = await context.bot.send_message(chat_id=user_id, text=msg_text)
+
+    sent_message_ids = [info_msg.message_id]
+
+    try:
+        docs = []
+        if item_type == "single":
+            doc = files_col.find_one({"_id": item_id})
+            if doc: docs.append(doc)
+        elif item_type == "batch":
+            batch_doc = batch_col.find_one({"_id": item_id})
+            if batch_doc:
+                for f_id in batch_doc["files"]:
+                    d = files_col.find_one({"_id": f_id})
+                    if d: docs.append(d)
+
+        for doc in docs:
+            itype = doc.get("item_type")
+            cap = (doc.get("caption", "") or "") + "\n\n⚠️ **This file will be automatically deleted in 2 minutes! Forward it to Saved Messages now.**"
+
+            if itype == "text":
+                sent = await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}\n\n⚠️ **Deletes in 2 minutes!**")
+            elif itype == "photo":
+                sent = await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=cap, parse_mode="Markdown")
+            elif itype == "video":
+                sent = await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=cap, parse_mode="Markdown")
+            else:
+                sent = await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap, parse_mode="Markdown")
+            
+            if sent:
+                sent_message_ids.append(sent.message_id)
+
+        # Trigger background auto-delete timer
+        asyncio.create_task(delete_message_after_delay(context.bot, user_id, sent_message_ids, AUTO_DELETE_SECONDS))
+
+    except Exception as e:
+        await context.bot.send_message(chat_id=user_id, text=f"❌ Error: {str(e)}")
+
+    if user_id in user_data:
+        del user_data[user_id]
 
 # ----------------- BROADCAST & DELETE CONTROLS -----------------
 async def run_background_broadcast(bot, admin_chat_id, reply_msg, extra_markup):
@@ -257,7 +313,6 @@ async def run_background_broadcast(bot, admin_chat_id, reply_msg, extra_markup):
     except Exception:
         pass
 
-
 async def broadcast_richads(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID:
         return
@@ -284,7 +339,6 @@ async def broadcast_richads(update: Update, context: ContextTypes.DEFAULT_TYPE):
         extra_markup=extra_markup
     ))
 
-
 async def stop_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID:
         return
@@ -294,7 +348,6 @@ async def stop_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🛑 ब्रॉडकास्ट रोकने की कमांड ले ली गई है। यह तुरंत बंद हो रहा है...")
     else:
         await update.message.reply_text("ℹ️ इस समय कोई भी ब्रॉडकास्ट चालू नहीं है।")
-
 
 async def delete_broadcasts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID:
@@ -330,7 +383,6 @@ async def delete_broadcasts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-
 # ----------------- HELPER FUNCTIONS -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -350,42 +402,6 @@ async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
             context.args = [param] if param and param != "None" else []
             await start(update, context)
-
-async def send_requested_item_direct(update, context, user_id, session, deduct_credit=True):
-    item_id = session["id"]
-    item_type = session["type"]
-
-    msg_text = "⚡ **1 Credit Deducted.** Delivering content..." if deduct_credit else "⚡ Delivering content..."
-    await context.bot.send_message(chat_id=user_id, text=msg_text)
-
-    try:
-        docs = []
-        if item_type == "single":
-            doc = files_col.find_one({"_id": item_id})
-            if doc: docs.append(doc)
-        elif item_type == "batch":
-            batch_doc = batch_col.find_one({"_id": item_id})
-            if batch_doc:
-                for f_id in batch_doc["files"]:
-                    d = files_col.find_one({"_id": f_id})
-                    if d: docs.append(d)
-
-        for doc in docs:
-            itype = doc.get("item_type")
-            if itype == "text":
-                await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}")
-            elif itype == "photo":
-                await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=doc.get("caption", ""))
-            elif itype == "video":
-                await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=doc.get("caption", ""))
-            else:
-                await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=doc.get("caption", ""))
-    except Exception as e:
-        await context.bot.send_message(chat_id=user_id, text=f"❌ Error: {str(e)}")
-
-    if user_id in user_data:
-        del user_data[user_id]
-
 
 # ----------------- ADMIN COMMANDS -----------------
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -485,7 +501,24 @@ async def gen_link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ **Single File Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
 
-# --- AUTOMATIC SINGLE FILE / BATCH HANDLER ---
+# --- BATCH LINK HANDLERS ---
+async def start_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    if context.user_data.get("in_batch"):
+        context.user_data["in_batch"] = False
+        batch_files = context.user_data.get("batch_files", [])
+        if not batch_files:
+            return await update.message.reply_text("⚠️ Batch mode turned OFF. No files were added.")
+        batch_id = str(uuid.uuid4())[:8]
+        batch_col.insert_one({"_id": batch_id, "files": batch_files})
+        context.user_data["batch_files"] = []
+        await update.message.reply_text(f"✅ **Batch Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={batch_id}`", parse_mode="Markdown")
+    else:
+        context.user_data["in_batch"] = True
+        context.user_data["batch_files"] = []
+        await update.message.reply_text("📦 **Batch Mode Enabled!** Now send or forward files one by one, then type `/batch` again to complete.")
+
+# --- AUTOMATIC SINGLE FILE / BATCH HANDLER FOR ADMIN ONLY ---
 async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID: return
     msg = update.message
@@ -513,41 +546,35 @@ async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYP
     else:
         await msg.reply_text(f"✅ **Single File Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
 
-async def start_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
-    if context.user_data.get("in_batch"):
-        if not context.user_data.get("batch_files"): 
-            context.user_data["in_batch"] = False
-            return await update.message.reply_text("⚠️ Batch empty! Batch mode exited.")
-        
-        batch_id = f"batch_{str(uuid.uuid4())[:8]}"
-        batch_col.insert_one({"_id": batch_id, "files": context.user_data["batch_files"]})
-        context.user_data["in_batch"] = False
-        context.user_data["batch_files"] = []
-        await update.message.reply_text(f"🎉 **Batch Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={batch_id}`", parse_mode="Markdown")
-    else:
-        context.user_data["in_batch"] = True
-        context.user_data["batch_files"] = []
-        await update.message.reply_text("📦 **Batch Mode Started!** अब आप जितनी चाहें उतनी फाइल्स भेजें, अंत में दोबारा `/batch` दबाएं।")
+# ----------------- MAIN APP INITIALIZATION -----------------
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
 
-# ----------------- MAIN BOOT -----------------
-if __name__ == "__main__":
-    app = ApplicationBuilder().token(TOKEN).connect_timeout(30.0).read_timeout(30.0).write_timeout(30.0).build()
-    
+    # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("sendad", broadcast_richads))
-    app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
-    app.add_handler(CommandHandler("deletebroadcast", delete_broadcasts))
-    app.add_handler(CommandHandler("genlink", gen_link_command))
-    app.add_handler(CommandHandler("batch", start_batch))
     app.add_handler(CommandHandler("admin", admin_help))
     app.add_handler(CommandHandler("togglead", toggle_ad))
     app.add_handler(CommandHandler("addchannel", add_channel))
     app.add_handler(CommandHandler("delchannel", del_channel))
     app.add_handler(CommandHandler("channels", list_channels))
-    app.add_handler(CallbackQueryHandler(fsub_callback, pattern="^check_fsub_"))
-    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_content))
+    app.add_handler(CommandHandler("genlink", gen_link_command))
+    app.add_handler(CommandHandler("batch", start_batch))
+    app.add_handler(CommandHandler("sendad", broadcast_richads))
+    app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
+    app.add_handler(CommandHandler("deletebroadcast", delete_broadcasts))
 
-    print("✅ Bot is polling...")
+    # Callbacks
+    app.add_handler(CallbackQueryHandler(fsub_callback))
+
+    # Admin file uploader
+    app.add_handler(MessageHandler(
+        filters.User(user_id=ADMIN_ID) & (filters.Document.ALL | filters.VIDEO | filters.PHOTO | filters.TEXT) & ~filters.COMMAND,
+        handle_admin_content
+    ))
+
+    print("🤖 Bot is starting...")
     app.run_polling()
+
+if __name__ == "__main__":
+    main()
