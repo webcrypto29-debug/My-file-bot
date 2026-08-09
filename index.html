@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Monetag Rewarded Ad</title>
-  
+  <title>Unlock Your File</title>
+
   <!-- Telegram Web App SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
@@ -12,107 +12,89 @@
   <script src='//ks313.com/sdk.js' data-zone='8981394' data-sdk='show_8981394'></script>
 
   <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
     body {
       background-color: #0f172a;
       color: #ffffff;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
-      margin: 0;
       padding: 20px;
-      box-sizing: border-box;
-      text-align: center;
     }
-
     .card {
       background: #1e293b;
-      padding: 24px;
+      padding: 28px 24px;
       border-radius: 16px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      text-align: center;
       max-width: 320px;
       width: 100%;
       border: 1px solid #334155;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
     }
-
     .icon {
-      font-size: 48px;
+      font-size: 50px;
       margin-bottom: 12px;
     }
-
     h2 {
-      margin: 0 0 8px 0;
       font-size: 20px;
-      color: #f8fafc;
+      margin-bottom: 8px;
     }
-
     p {
       font-size: 14px;
       color: #94a3b8;
-      margin: 0 0 20px 0;
+      margin-bottom: 24px;
       line-height: 1.4;
     }
-
     .btn {
-      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       color: white;
       border: none;
-      padding: 14px 20px;
+      padding: 15px;
       font-size: 16px;
       font-weight: 600;
       border-radius: 12px;
       cursor: pointer;
       width: 100%;
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-      transition: all 0.2s ease;
     }
-
     .btn:active {
       transform: scale(0.98);
     }
-
-    .btn:disabled {
-      background: #475569;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-
-    .status {
-      margin-top: 16px;
-      font-size: 13px;
-      color: #38bdf8;
-      min-height: 18px;
+    .btn-success {
+      background: linear-gradient(135deg, #16a34a, #15803d) !important;
+      box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
     }
   </style>
 </head>
 <body>
 
   <div class="card">
-    <div class="icon">🎁</div>
-    <h2>Unlock Your File</h2>
-    <p>Watch a short rewarded ad to automatically unlock your file in Telegram.</p>
-    
-    <button id="adBtn" class="btn" onclick="triggerAd()">Watch Ad to Unlock</button>
-    <div id="statusText" class="status">Initializing...</div>
+    <div class="icon" id="cardIcon">🎁</div>
+    <h2 id="cardTitle">Unlock Your File</h2>
+    <p id="cardDesc">Watch a short ad to automatically unlock your file in Telegram.</p>
+
+    <!-- डायरेक्ट ऐक्शन बटन (कोई फालतू लोडिंग टेक्स्ट नहीं) -->
+    <button id="mainBtn" class="btn" onclick="handleAdClick()">Watch Ad to Unlock</button>
   </div>
 
   <script>
+    const BOT_USERNAME = "MyFile727_bot";
     const tg = window.Telegram ? window.Telegram.WebApp : null;
-    const BOT_USERNAME = "MyFile727_bot"; // Your Bot Username
 
     if (tg) {
       tg.ready();
       tg.expand();
     }
 
-    // Update status once SDK is loaded
-    window.addEventListener('load', () => {
-      document.getElementById('statusText').innerText = "Ready! Click above to watch.";
-    });
+    let isAdFinished = false;
 
-    function redirectToBot() {
+    function finishAndRedirect() {
       const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
       if (tg && tg.openTelegramLink) {
         tg.openTelegramLink(redirectUrl);
@@ -120,44 +102,43 @@
         window.location.href = redirectUrl;
       }
       if (tg) {
-        setTimeout(() => tg.close(), 500);
+        setTimeout(() => tg.close(), 300);
       }
     }
 
-    function triggerAd() {
-      const btn = document.getElementById('adBtn');
-      const status = document.getElementById('statusText');
+    function handleAdClick() {
+      const btn = document.getElementById('mainBtn');
+      const title = document.getElementById('cardTitle');
+      const desc = document.getElementById('cardDesc');
+      const icon = document.getElementById('cardIcon');
 
-      btn.disabled = true;
-
-      // Check if Monetag SDK is loaded
-      if (typeof show_8981394 !== 'function') {
-        status.innerText = "Ad Network bypass triggered... Redirecting!";
-        // SDK nahi mila to user ko 1.5sec me auto-redirect kar do taaki stuck na ho
-        setTimeout(() => {
-          redirectToBot();
-        }, 1500);
+      // अगर एड पहले ही देखा जा चुका है और यूज़र "Get File" दबाता है:
+      if (isAdFinished) {
+        finishAndRedirect();
         return;
       }
 
-      status.innerText = "Loading Ad...";
-
-      // Trigger Monetag Rewarded Ad
-      show_8981394()
-        .then(() => {
-          status.innerText = "Ad Finished! Redirecting to Bot...";
-          setTimeout(() => {
-            redirectToBot();
-          }, 1000);
-        })
-        .catch((err) => {
-          console.error("Ad error or closed:", err);
-          status.innerText = "Bypassing Ad... Redirecting to Bot!";
-          // Agar Ad fail bhi ho jaye ya Ad Blocker ho, tab bhi user redirect ho jayega
-          setTimeout(() => {
-            redirectToBot();
-          }, 1200);
-        });
+      // Monetag In-App SDK ट्रिगर चेक
+      if (typeof show_8981394 === 'function') {
+        show_8981394()
+          .then(() => {
+            // एड पूरा देखने के बाद
+            isAdFinished = true;
+            icon.innerText = "✅";
+            title.innerText = "Ad Completed!";
+            desc.innerText = "Click below to claim your file inside Telegram.";
+            btn.innerText = "Get Files 🚀";
+            btn.className = "btn btn-success";
+          })
+          .catch((err) => {
+            console.error("Ad failed or closed:", err);
+            // एड फेल होने पर भी यूज़र को सीधे रिडायरेक्ट करने का ऑप्शन दो
+            finishAndRedirect();
+          });
+      } else {
+        // अगर ब्राउज़र या एड-ब्लॉकर की वजह से Monetag SDK लोड नहीं हुआ
+        finishAndRedirect();
+      }
     }
   </script>
 </body>
