@@ -1,6 +1,7 @@
 import asyncio
 import json
 import os
+import re
 import threading
 import time
 import urllib.request
@@ -51,6 +52,10 @@ BOT_USERNAME = "MyFile727_bot"
 MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
 ADMIN_ID = 5911965767
 AUTO_DELETE_SECONDS = 120  # 2 Minutes Auto-Delete
+
+# Database Channel ID (Add your DB Channel ID here, e.g., -100xxxxxxxxxx)
+# Make sure the bot is ADMIN in your DB channel: https://t.me/+PD3_G7V35rEzODM9
+DB_CHANNEL_ID = -1002233445566  # Replace this with your exact DB Channel ID
 # --------------------------------------------------
 
 # MongoDB Setup
@@ -250,7 +255,7 @@ async def send_requested_item_direct(update, context, user_id, session, deduct_c
             if sent:
                 sent_message_ids.append(sent.message_id)
 
-        # Trigger background auto-delete timer
+        # Background timer for 2-Minute Auto Delete in User PM
         asyncio.create_task(delete_message_after_delay(context.bot, user_id, sent_message_ids, AUTO_DELETE_SECONDS))
 
     except Exception as e:
@@ -259,270 +264,11 @@ async def send_requested_item_direct(update, context, user_id, session, deduct_c
     if user_id in user_data:
         del user_data[user_id]
 
-# ----------------- BROADCAST & DELETE CONTROLS -----------------
-async def run_background_broadcast(bot, admin_chat_id, reply_msg, extra_markup):
-    global broadcast_control
-    broadcast_control["is_running"] = True
-
-    all_users = list(users_col.find({}))
-    total_users = len(all_users)
-
-    if total_users == 0:
-        broadcast_control["is_running"] = False
-        await bot.send_message(chat_id=admin_chat_id, text="ℹ️ डेटाबेस में कोई भी यूज़र नहीं मिला।")
+# ----------------- DATABASE CHANNEL AUTO-SAVER -----------------
+async def handle_db_channel_post(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.channel_post
+    if not msg:
         return
-
-    status_msg = await bot.send_message(chat_id=admin_chat_id, text=f"🚀 {total_users} यूज़र्स को ब्रॉडकास्ट भेजा जा रहा है...\n🛑 रोकने के लिए `/stopbroadcast` भेजें।")
-
-    success = 0
-    failed = 0
-
-    for u in all_users:
-        if not broadcast_control["is_running"]:
-            await bot.send_message(chat_id=admin_chat_id, text="⚠️ **ब्रॉडकास्ट बीच में ही रोक दिया गया है!**")
-            break
-
-        u_id = u["_id"]
-        try:
-            sent_msg = await bot.copy_message(
-                chat_id=int(u_id),
-                from_chat_id=reply_msg.chat_id,
-                message_id=reply_msg.message_id,
-                reply_markup=extra_markup
-            )
-            if sent_msg:
-                broadcast_history_col.insert_one({
-                    "user_id": int(u_id),
-                    "message_id": sent_msg.message_id
-                })
-            success += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            failed += 1
-
-    broadcast_control["is_running"] = False
-
-    try:
-        await status_msg.edit_text(
-            f"✅ **ब्रॉडकास्ट प्रक्रिया समाप्त हुई!**\n\n"
-            f"👥 कुल यूज़र्स: **{total_users}**\n"
-            f"🎯 सफलतापूर्वक भेजा गया: **{success}**\n"
-            f"❌ विफल/ब्लॉक: **{failed}**",
-            parse_mode="Markdown"
-        )
-    except Exception:
-        pass
-
-async def broadcast_richads(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-
-    if broadcast_control["is_running"]:
-        await update.message.reply_text("⚠️ पहले से एक ब्रॉडकास्ट चल रहा है! उसे रोकने के लिए `/stopbroadcast` भेजें।")
-        return
-
-    if not update.message.reply_to_message:
-        await update.message.reply_text(
-            "⚠️ **उपयोग का तरीका:**\n\n"
-            "जिस भी एड्स या बटन्स वाले मैसेज को सभी को भेजना है, उस पर **Reply** करें और फिर `/sendad` लिखें!",
-            parse_mode="Markdown"
-        )
-        return
-
-    reply_msg = update.message.reply_to_message
-    extra_markup = reply_msg.reply_markup if reply_msg.reply_markup else None
-
-    asyncio.create_task(run_background_broadcast(
-        bot=context.bot,
-        admin_chat_id=update.effective_chat.id,
-        reply_msg=reply_msg,
-        extra_markup=extra_markup
-    ))
-
-async def stop_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-    
-    if broadcast_control["is_running"]:
-        broadcast_control["is_running"] = False
-        await update.message.reply_text("🛑 ब्रॉडकास्ट रोकने की कमांड ले ली गई है। यह तुरंत बंद हो रहा है...")
-    else:
-        await update.message.reply_text("ℹ️ इस समय कोई भी ब्रॉडकास्ट चालू नहीं है।")
-
-async def delete_broadcasts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-    
-    records = list(broadcast_history_col.find({}))
-    if not records:
-        await update.message.reply_text("ℹ️ डेटाबेस में डिलीट करने के लिए कोई पुराना ब्रॉडकास्ट रिकॉर्ड नहीं मिला।")
-        return
-    
-    status_msg = await update.message.reply_text(f"🗑 कुल {len(records)} ब्रॉडकास्ट मैसेज्स को यूज़र्स की चैट से डिलीट किया जा रहा है...")
-    
-    deleted_count = 0
-    failed_count = 0
-    
-    for rec in records:
-        try:
-            await context.bot.delete_message(chat_id=rec["user_id"], message_id=rec["message_id"])
-            deleted_count += 1
-            await asyncio.sleep(0.03)
-        except Exception:
-            failed_count += 1
-            
-    broadcast_history_col.delete_many({})
-    
-    try:
-        await status_msg.edit_text(
-            f"✅ **ब्रॉडकास्ट डिलीट प्रक्रिया पूरी हुई!**\n\n"
-            f"🗑 सफलतापूर्वक डिलीट किए गए मैसेज: **{deleted_count}**\n"
-            f"⚠️ जो डिलीट नहीं हो सके (यूज़र द्वारा डिलीट या बॉट ब्लॉक): **{failed_count}**",
-            parse_mode="Markdown"
-        )
-    except Exception:
-        pass
-
-# ----------------- HELPER FUNCTIONS -----------------
-async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    data = query.data
-
-    if data.startswith("check_fsub_"):
-        param = data.replace("check_fsub_", "")
-        unjoined = await check_force_sub(context.bot, user_id)
-        if unjoined:
-            await query.answer("❌ You haven't joined all channels yet!", show_alert=True)
-        else:
-            await query.answer("✅ Verified!")
-            try:
-                await query.message.delete()
-            except Exception:
-                pass
-            context.args = [param] if param and param != "None" else []
-            await start(update, context)
-
-# ----------------- ADMIN COMMANDS -----------------
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-    
-    total_users = users_col.count_documents({})
-    total_files = files_col.count_documents({})
-    total_batches = batch_col.count_documents({})
-    
-    await update.message.reply_text(
-        f"📊 **Bot Statistics:**\n\n"
-        f"👥 Total Users: **{total_users}**\n"
-        f"📁 Single Files: **{total_files}**\n"
-        f"📦 Batches Created: **{total_batches}**",
-        parse_mode="Markdown"
-    )
-
-async def admin_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-    status = "🟢 ON" if get_ad_status() else "🔴 OFF"
-    await update.message.reply_text(
-        "🛠 **Admin Panel:**\n"
-        "• `/stats` - यूज़र्स और फाइल्स के स्टैट्स देखें।\n"
-        "• **Direct Send / /genlink:** फाइल भेजें या `/genlink` से लिंक बनाएं।\n"
-        "• `/sendad` - (मैसेज पर Reply करके) ब्रॉडकास्ट शुरू करें।\n"
-        "• `/stopbroadcast` - चालू ब्रॉडकास्ट रोकें।\n"
-        "• `/deletebroadcast` - सभी ब्रॉडकास्ट मैसेज्स डिलीट करें।\n"
-        "• `/batch` - बैच लिंक मोड ऑन/ऑफ करें।\n"
-        f"• `/togglead` - एड्स टॉगल करें ({status})\n"
-        "• `/addchannel @username`\n"
-        "• `/delchannel @username`\n"
-        "• `/channels`"
-    )
-
-async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-    new_status = not get_ad_status()
-    settings_col.update_one({"_id": "ad_status"}, {"$set": {"status": new_status}}, upsert=True)
-    await update.message.reply_text(f"⚙️ Ad Status: {'🟢 ON' if new_status else '🔴 OFF'}")
-
-async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
-    if not context.args: return await update.message.reply_text("⚠️ Use: `/addchannel @channel`")
-    try:
-        chat = await context.bot.get_chat(context.args[0])
-        channels_col.update_one(
-            {"_id": chat.id},
-            {"$set": {"title": chat.title, "link": f"https://t.me/{chat.username}" if chat.username else ""}},
-            upsert=True
-        )
-        await update.message.reply_text(f"✅ Added {chat.title}!")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-
-async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
-    if not context.args: return
-    try: channels_col.delete_one({"_id": int(context.args[0])})
-    except: channels_col.delete_one({"_id": context.args[0]})
-    await update.message.reply_text("✅ Channel removed!")
-
-async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
-    channels = list(channels_col.find())
-    if not channels: return await update.message.reply_text("ℹ️ No channels.")
-    await update.message.reply_text("📢 Channels:\n" + "\n".join([f"- {c.get('title')}" for c in channels]))
-
-# --- /genlink COMMAND HANDLER ---
-async def gen_link_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID:
-        return
-    
-    msg = update.message
-    if not msg.reply_to_message:
-        await update.message.reply_text("⚠️ कृपया किसी फाइल, फोटो या टेक्स्ट मैसेज पर **Reply** करके `/genlink` लिखें!")
-        return
-    
-    target_msg = msg.reply_to_message
-    unique_id = str(uuid.uuid4())[:8]
-    item_type, file_id = "text", None
-
-    if target_msg.document: item_type, file_id = "file", target_msg.document.file_id
-    elif target_msg.video: item_type, file_id = "video", target_msg.video.file_id
-    elif target_msg.photo: item_type, file_id = "photo", target_msg.photo[-1].file_id
-    elif target_msg.text: item_type = "text"
-    else:
-        await update.message.reply_text("❌ समर्थित फ़ॉर्मेट नहीं है!")
-        return
-
-    files_col.insert_one({
-        "_id": unique_id, "item_type": item_type, "file_id": file_id,
-        "caption": target_msg.caption or "", "text": target_msg.text if item_type == "text" else ""
-    })
-
-    await update.message.reply_text(f"✅ **Single File Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
-
-# --- BATCH LINK HANDLERS ---
-async def start_batch(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
-    if context.user_data.get("in_batch"):
-        context.user_data["in_batch"] = False
-        batch_files = context.user_data.get("batch_files", [])
-        if not batch_files:
-            return await update.message.reply_text("⚠️ Batch mode turned OFF. No files were added.")
-        batch_id = str(uuid.uuid4())[:8]
-        batch_col.insert_one({"_id": batch_id, "files": batch_files})
-        context.user_data["batch_files"] = []
-        await update.message.reply_text(f"✅ **Batch Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={batch_id}`", parse_mode="Markdown")
-    else:
-        context.user_data["in_batch"] = True
-        context.user_data["batch_files"] = []
-        await update.message.reply_text("📦 **Batch Mode Enabled!** Now send or forward files one by one, then type `/batch` again to complete.")
-
-# --- AUTOMATIC SINGLE FILE / BATCH HANDLER FOR ADMIN ONLY ---
-async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
-    msg = update.message
-    if not msg: return
 
     unique_id = str(uuid.uuid4())[:8]
     item_type, file_id = "text", None
@@ -530,21 +276,86 @@ async def handle_admin_content(update: Update, context: ContextTypes.DEFAULT_TYP
     if msg.document: item_type, file_id = "file", msg.document.file_id
     elif msg.video: item_type, file_id = "video", msg.video.file_id
     elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-    elif msg.text and not msg.text.startswith("/"): item_type = "text"
+    elif msg.text: item_type = "text"
     else: return
 
+    caption_text = msg.caption or msg.text or "File Link"
+
+    # Store directly in Mongo DB
     files_col.insert_one({
-        "_id": unique_id, "item_type": item_type, "file_id": file_id,
-        "caption": msg.caption or "", "text": msg.text if item_type == "text" else ""
+        "_id": unique_id,
+        "item_type": item_type,
+        "file_id": file_id,
+        "caption": caption_text,
+        "text": msg.text if item_type == "text" else "",
+        "created_at": time.time()
     })
 
-    if context.user_data.get("in_batch"):
-        if "batch_files" not in context.user_data:
-            context.user_data["batch_files"] = []
-        context.user_data["batch_files"].append(unique_id)
-        await msg.reply_text(f"✅ Added to batch ({len(context.user_data['batch_files'])})")
+# ----------------- GROUP SEARCH & HYPERLINK FORMATTER WITH AUTO-DELETE -----------------
+async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or not msg.text or msg.text.startswith("/"):
+        return
+
+    if msg.chat.type not in ["group", "supergroup"]:
+        return
+
+    start_time = time.time()
+    query_text = msg.text.strip()
+    if len(query_text) < 2:
+        return
+
+    regex_pattern = re.compile(re.escape(query_text), re.IGNORECASE)
+    results = list(files_col.find({
+        "$or": [
+            {"caption": {"$regex": regex_pattern}},
+            {"text": {"$regex": regex_pattern}}
+        ]
+    }).limit(10))
+
+    user = msg.from_user
+    user_name = user.first_name if user else "User"
+
+    if results:
+        elapsed = round(time.time() - start_time, 2)
+        
+        # Exact Formatting from Second Photo
+        response = (
+            f"🏷 **TITLE :** `{query_text}`\n"
+            f"📦 **TOTAL FILES :** {len(results)}\n"
+            f"⏰ **RESULT IN :** {elapsed} SECONDS\n\n"
+            f"📝 **REQUESTED BY :** {user_name}\n"
+            f"⚜️ **POWERED BY :** {BOT_USERNAME}\n\n"
+            f"<u><b>Your Requested Files Are Here</b></u>\n\n"
+        )
+
+        for idx, file_item in enumerate(results, start=1):
+            title = file_item.get("caption") or file_item.get("text") or "Download File"
+            clean_title = title.replace("\n", " ").strip()
+            if len(clean_title) > 60:
+                clean_title = clean_title[:57] + "..."
+            
+            bot_link = f"https://t.me/{BOT_USERNAME}?start={file_item['_id']}"
+            response += f"**{idx}.** [{clean_title}]({bot_link})\n\n"
+
+        sent_group_msg = await msg.reply_text(response, parse_mode="Markdown", disable_web_page_preview=True)
+
+        # 2-Minute Auto Delete for Group Search Result
+        asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
     else:
-        await msg.reply_text(f"✅ **Single File Link Generated:**\n`https://t.me/{BOT_USERNAME}?start={unique_id}`", parse_mode="Markdown")
+        # File Not Found Alert (Deletes in 2 minutes too)
+        sent_group_msg = await msg.reply_text(
+            f"❌ **File Not Found!**\n\nYour request for `{query_text}` has been logged.",
+            parse_mode="Markdown"
+        )
+        asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
+
+# ----------------- BROADCAST & ADMIN COMMANDS -----------------
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.effective_user or update.effective_user.id != ADMIN_ID: return
+    total_users = users_col.count_documents({})
+    total_files = files_col.count_documents({})
+    await update.message.reply_text(f"📊 **Bot Stats:**\n👥 Users: **{total_users}**\n📁 Files: **{total_files}**", parse_mode="Markdown")
 
 # ----------------- MAIN APP INITIALIZATION -----------------
 def main():
@@ -553,27 +364,23 @@ def main():
     # Commands
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stats", stats_command))
-    app.add_handler(CommandHandler("admin", admin_help))
-    app.add_handler(CommandHandler("togglead", toggle_ad))
-    app.add_handler(CommandHandler("addchannel", add_channel))
-    app.add_handler(CommandHandler("delchannel", del_channel))
-    app.add_handler(CommandHandler("channels", list_channels))
-    app.add_handler(CommandHandler("genlink", gen_link_command))
-    app.add_handler(CommandHandler("batch", start_batch))
-    app.add_handler(CommandHandler("sendad", broadcast_richads))
-    app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
-    app.add_handler(CommandHandler("deletebroadcast", delete_broadcasts))
 
     # Callbacks
     app.add_handler(CallbackQueryHandler(fsub_callback))
 
-    # Admin file uploader
+    # 1. DB Channel Auto Posts Handler
     app.add_handler(MessageHandler(
-        filters.User(user_id=ADMIN_ID) & (filters.Document.ALL | filters.VIDEO | filters.PHOTO | filters.TEXT) & ~filters.COMMAND,
-        handle_admin_content
+        filters.ChatType.CHANNEL,
+        handle_db_channel_post
     ))
 
-    print("🤖 Bot is starting...")
+    # 2. Group Auto Search (Formatted + Auto Delete in 2 Mins)
+    app.add_handler(MessageHandler(
+        filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS,
+        handle_group_search
+    ))
+
+    print("🤖 Bot is active with DB Channel Listener...")
     app.run_polling()
 
 if __name__ == "__main__":
