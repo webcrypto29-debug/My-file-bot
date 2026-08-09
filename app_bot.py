@@ -118,7 +118,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2. Ad Verification Handler
+    # 2. Ad Verification Handler (FIXED: 14s -> 5s)
     if args and args[0] == "VERIFY_AD":
         user_session = user_data.get(user_id)
         if not user_session:
@@ -132,7 +132,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         click_time = user_session.get("click_time", 0)
         time_elapsed = time.time() - click_time
 
-        if time_elapsed < 14:
+        # Verification Time reduced from 14s to 5s
+        if time_elapsed < 5:
             await safe_reply(
                 "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed properly or finished too quickly. Please watch the ad fully.",
                 parse_mode="Markdown"
