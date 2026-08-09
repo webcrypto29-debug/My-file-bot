@@ -1,165 +1,151 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unlock Content - Video Ad</title>
-    
-    <!-- Telegram Web App SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    
-    <!-- Monetag Rewarded Interstitial SDK -->
-    <script src="//libtl.com/sdk.js" data-zone="11452552" data-sdk="show_11452552"></script>
-    
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        }
-        body {
-            background-color: #0f172a;
-            color: #ffffff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            text-align: center;
-            padding: 20px;
-        }
-        .container {
-            background: #1e293b;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            max-width: 400px;
-            width: 100%;
-        }
-        h2 {
-            margin-bottom: 12px;
-            font-size: 22px;
-            color: #f8fafc;
-        }
-        p {
-            color: #94a3b8;
-            font-size: 14px;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
-        .btn {
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            padding: 14px 20px;
-            font-size: 16px;
-            font-weight: 600;
-            border-radius: 10px;
-            cursor: pointer;
-            width: 100%;
-            transition: background 0.2s, opacity 0.2s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .btn:disabled {
-            background-color: #475569;
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        .success-msg {
-            color: #10b981;
-            font-size: 15px;
-            font-weight: 600;
-            margin-bottom: 15px;
-            display: none;
-        }
-        .alert-msg {
-            background-color: rgba(239, 68, 68, 0.15);
-            border: 1px solid #ef4444;
-            color: #f87171;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 13px;
-            margin-top: 15px;
-            display: none;
-            line-height: 1.4;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monetag Rewarded Ad</title>
+  
+  <!-- Telegram Web App SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Monetag In-App SDK -->
+  <script src='//ks313.com/sdk.js' data-zone='8981394' data-sdk='show_8981394'></script>
+
+  <style>
+    body {
+      background-color: #0f172a;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+      text-align: center;
+    }
+
+    .card {
+      background: #1e293b;
+      padding: 24px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      max-width: 320px;
+      width: 100%;
+      border: 1px solid #334155;
+    }
+
+    .icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    h2 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      color: #f8fafc;
+    }
+
+    p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin: 0 0 20px 0;
+      line-height: 1.4;
+    }
+
+    .btn {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      transition: all 0.2s ease;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn:disabled {
+      background: #475569;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .status {
+      margin-top: 16px;
+      font-size: 13px;
+      color: #38bdf8;
+      min-height: 18px;
+    }
+  </style>
 </head>
 <body>
 
-    <div class="container">
-        <h2>🎥 Watch Video to Unlock</h2>
-        <p>Click below to play the video ad. You must watch the complete video to receive your file and +3 credits automatically!</p>
-        
-        <button class="btn" id="adBtn" onclick="playVideoAd()">1. Play Video Ad 🚀</button>
-        
-        <div class="success-msg" id="successMsg">🎉 Video Completed Successfully!</div>
-        
-        <div class="alert-msg" id="alertMsg">
-            ⚠️ <b>Video failed or was closed!</b><br>Please watch the video fully to claim your reward.
-        </div>
-        
-        <br>
-        <button class="btn" id="verifyBtn" style="background-color: #10b981; display: none;" onclick="completeVerification()">2. Get File & Credits 🎉</button>
-    </div>
+  <div class="card">
+    <div class="icon">🎁</div>
+    <h2>Unlock Your File</h2>
+    <p>Watch a short rewarded ad to automatically unlock your file in Telegram.</p>
+    
+    <button id="adBtn" class="btn" onclick="triggerAd()">Watch Ad to Unlock</button>
+    <div id="statusText" class="status">Initializing...</div>
+  </div>
 
-    <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+  <script>
+    const tg = window.Telegram ? window.Telegram.WebApp : null;
+    const BOT_USERNAME = "MyFile727_bot"; // Your Bot Username
 
-        let adWatched = false;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
 
-        function playVideoAd() {
-            const adBtn = document.getElementById('adBtn');
-            const alertMsg = document.getElementById('alertMsg');
-            const verifyBtn = document.getElementById('verifyBtn');
-            const successMsg = document.getElementById('successMsg');
-            
-            alertMsg.style.display = 'none';
-            adBtn.disabled = true;
-            adBtn.innerText = "Loading Video...";
+    // Update status once SDK is loaded
+    window.addEventListener('load', () => {
+      document.getElementById('statusText').innerText = "Ready! Click above to watch.";
+    });
 
-            // Monetag Rewarded SDK Call
-            if (typeof show_11452552 === 'function') {
-                show_11452552().then(() => {
-                    // This block ONLY runs when the user finishes watching the video ad
-                    adWatched = true;
-                    adBtn.style.display = 'none';
-                    successMsg.style.display = 'block';
-                    verifyBtn.style.display = 'block';
-                }).catch((err) => {
-                    // This block runs if the ad fails to load or user closes it early
-                    console.error("Ad error:", err);
-                    adBtn.disabled = false;
-                    adBtn.innerText = "1. Play Video Ad 🚀";
-                    alertMsg.innerHTML = "⚠️ <b>Ad skipped or failed to load!</b><br>Please try again.";
-                    alertMsg.style.display = 'block';
-                });
+    function triggerAd() {
+      const btn = document.getElementById('adBtn');
+      const status = document.getElementById('statusText');
+
+      if (typeof show_8981394 !== 'function') {
+        status.innerText = "Ad Provider loading... Please wait 3 seconds.";
+        return;
+      }
+
+      btn.disabled = true;
+      status.innerText = "Loading Ad...";
+
+      // Trigger Monetag Rewarded Ad
+      show_8981394()
+        .then(() => {
+          status.innerText = "Ad Finished! Redirecting to Bot...";
+          
+          // Redirect back to Telegram Bot with Verification Parameter
+          setTimeout(() => {
+            const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
+            if (tg && tg.openTelegramLink) {
+              tg.openTelegramLink(redirectUrl);
             } else {
-                adBtn.disabled = false;
-                adBtn.innerText = "1. Play Video Ad 🚀";
-                alertMsg.innerHTML = "⚠️ <b>Ad System is loading...</b><br>Please wait a few seconds and try again.";
-                alertMsg.style.display = 'block';
+              window.location.href = redirectUrl;
             }
-        }
-
-        function completeVerification() {
-            if (!adWatched) {
-                document.getElementById('alertMsg').style.display = 'block';
-                return;
-            }
-
-            const verifyBtn = document.getElementById('verifyBtn');
-            verifyBtn.style.pointerEvents = 'none';
-            verifyBtn.style.opacity = '0.8';
-            verifyBtn.innerText = "✅ Processing... Check Telegram";
-
-            // Redirect back to Telegram Bot to claim credits & file
-            setTimeout(() => {
-                window.location.href = `https://t.me/MyFile727_bot?start=VERIFY_AD`;
-            }, 500);
-        }
-    </script>
+            if (tg) tg.close();
+          }, 1000);
+        })
+        .catch((err) => {
+          console.error("Ad error or closed:", err);
+          status.innerText = "Ad was closed or failed. Please try again.";
+          btn.disabled = false;
+        });
+    }
+  </script>
 </body>
 </html>
