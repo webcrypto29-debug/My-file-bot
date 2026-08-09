@@ -37,7 +37,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Termux DNS Fix
+# Termux / Hosting DNS Fix
 try:
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
     dns.resolver.default_resolver.nameservers = ["8.8.8.8", "8.8.4.4"]
@@ -52,10 +52,6 @@ BOT_USERNAME = "MyFile727_bot"
 MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
 ADMIN_ID = 5911965767
 AUTO_DELETE_SECONDS = 120  # 2 Minutes Auto-Delete
-
-# Database Channel ID (Add your DB Channel ID here, e.g., -100xxxxxxxxxx)
-# Make sure the bot is ADMIN in your DB channel: https://t.me/+PD3_G7V35rEzODM9
-DB_CHANNEL_ID = -1002233445566  # Replace this with your exact DB Channel ID
 # --------------------------------------------------
 
 # MongoDB Setup
@@ -255,7 +251,7 @@ async def send_requested_item_direct(update, context, user_id, session, deduct_c
             if sent:
                 sent_message_ids.append(sent.message_id)
 
-        # Background timer for 2-Minute Auto Delete in User PM
+        # Trigger background auto-delete timer
         asyncio.create_task(delete_message_after_delay(context.bot, user_id, sent_message_ids, AUTO_DELETE_SECONDS))
 
     except Exception as e:
@@ -281,7 +277,6 @@ async def handle_db_channel_post(update: Update, context: ContextTypes.DEFAULT_T
 
     caption_text = msg.caption or msg.text or "File Link"
 
-    # Store directly in Mongo DB
     files_col.insert_one({
         "_id": unique_id,
         "item_type": item_type,
@@ -291,7 +286,7 @@ async def handle_db_channel_post(update: Update, context: ContextTypes.DEFAULT_T
         "created_at": time.time()
     })
 
-# ----------------- GROUP SEARCH & HYPERLINK FORMATTER WITH AUTO-DELETE -----------------
+# ----------------- GROUP SEARCH & HYPERLINK FORMATTER -----------------
 async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text or msg.text.startswith("/"):
@@ -319,7 +314,6 @@ async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE
     if results:
         elapsed = round(time.time() - start_time, 2)
         
-        # Exact Formatting from Second Photo
         response = (
             f"🏷 **TITLE :** `{query_text}`\n"
             f"📦 **TOTAL FILES :** {len(results)}\n"
@@ -339,18 +333,35 @@ async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE
             response += f"**{idx}.** [{clean_title}]({bot_link})\n\n"
 
         sent_group_msg = await msg.reply_text(response, parse_mode="Markdown", disable_web_page_preview=True)
-
-        # 2-Minute Auto Delete for Group Search Result
         asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
     else:
-        # File Not Found Alert (Deletes in 2 minutes too)
         sent_group_msg = await msg.reply_text(
             f"❌ **File Not Found!**\n\nYour request for `{query_text}` has been logged.",
             parse_mode="Markdown"
         )
         asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
 
-# ----------------- BROADCAST & ADMIN COMMANDS -----------------
+# ----------------- HELPER FUNCTIONS -----------------
+async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    if data.startswith("check_fsub_"):
+        param = data.replace("check_fsub_", "")
+        unjoined = await check_force_sub(context.bot, user_id)
+        if unjoined:
+            await query.answer("❌ You haven't joined all channels yet!", show_alert=True)
+        else:
+            await query.answer("✅ Verified!")
+            try:
+                await query.message.delete()
+            except Exception:
+                pass
+            context.args = [param] if param and param != "None" else []
+            await start(update, context)
+
+# ----------------- ADMIN COMMANDS & STATS -----------------
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.effective_user or update.effective_user.id != ADMIN_ID: return
     total_users = users_col.count_documents({})
@@ -368,20 +379,21 @@ def main():
     # Callbacks
     app.add_handler(CallbackQueryHandler(fsub_callback))
 
-    # 1. DB Channel Auto Posts Handler
+    # Database Channel Listener
     app.add_handler(MessageHandler(
         filters.ChatType.CHANNEL,
         handle_db_channel_post
     ))
 
-    # 2. Group Auto Search (Formatted + Auto Delete in 2 Mins)
+    # Group Search Handler
     app.add_handler(MessageHandler(
         filters.TEXT & ~filters.COMMAND & filters.ChatType.GROUPS,
         handle_group_search
     ))
 
-    print("🤖 Bot is active with DB Channel Listener...")
+    print("🤖 Bot is starting cleanly...")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
+        
