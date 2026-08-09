@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unlock Content</title>
+    <title>Veronica Bot - Unlock Content</title>
 
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -13,58 +13,84 @@
 
     <style>
         body {
-            background-color: #0f172a;
+            background-color: #0b1120;
             color: #ffffff;
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
-            padding: 20px;
+            padding: 16px;
             box-sizing: border-box;
             text-align: center;
         }
+
         .card {
-            background-color: #1e293b;
-            padding: 30px 20px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-            max-width: 350px;
+            background-color: #172033;
+            padding: 32px 24px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            max-width: 360px;
             width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.05);
         }
+
+        .icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            display: block;
+        }
+
         h2 {
-            margin-top: 0;
+            margin: 0 0 10px 0;
             font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
         }
+
         p {
             color: #94a3b8;
             font-size: 14px;
-            margin-bottom: 25px;
+            line-height: 1.5;
+            margin: 0 0 24px 0;
         }
+
+        p b {
+            color: #cbd5e1;
+        }
+
         .btn {
-            background-color: #2563eb;
             color: white;
             border: none;
-            padding: 14px 24px;
+            padding: 14px 20px;
             font-size: 16px;
-            font-weight: bold;
-            border-radius: 10px;
+            font-weight: 600;
+            border-radius: 12px;
             cursor: pointer;
             width: 100%;
-            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: transform 0.1s ease, opacity 0.2s;
         }
-        .btn-success {
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        /* पहली स्क्रीन का बटन (नीला) */
+        .btn-blue {
+            background-color: #2563eb;
+        }
+
+        /* दूसरी स्क्रीन का बटन (हरा) */
+        .btn-green {
             background-color: #16a34a;
         }
-        .btn-success:active {
-            background-color: #15803d;
-        }
-        .btn:active {
-            background-color: #1d4ed8;
-        }
-        /* सेकंड स्क्रीन को शुरू में छुपाने के लिए */
+
+        /* दूसरी स्क्रीन को शुरू में छुपाने के लिए */
         #step2 {
             display: none;
         }
@@ -72,18 +98,20 @@
 </head>
 <body>
 
-    <!-- SCREEN 1: वॉच एड पेज -->
+    <!-- SCREEN 1 (Image 1): वॉच ऐड कार्ड -->
     <div class="card" id="step1">
-        <h2>🔒 Unlock Your Content</h2>
+        <span class="icon">🔒</span>
+        <h2>Unlock Your Content</h2>
         <p>Watch a short ad completely to get <b>+3 Credits</b> and auto-download your file.</p>
-        <button class="btn" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
+        <button class="btn btn-blue" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
     </div>
 
-    <!-- SCREEN 2: एड कम्प्लीट होने के बाद का 'Get Link' पेज -->
+    <!-- SCREEN 2 (Image 2): ऐड खत्म होने के बाद का गिफ़्ट कार्ड -->
     <div class="card" id="step2">
-        <h2 style="color: #4ade80;">🎉 Ad Completed!</h2>
-        <p>You have earned <b>+3 Credits</b>. Click below to claim your link and download your file.</p>
-        <button class="btn btn-success" onclick="getLink()">Get Link / Get File 📁</button>
+        <span class="icon">🎁</span>
+        <h2>Unlock Your File</h2>
+        <p>Watch a short rewarded ad to automatically unlock your file in Telegram.</p>
+        <button class="btn btn-green" onclick="getFiles()">Get Files 🚀</button>
     </div>
 
     <script>
@@ -93,7 +121,7 @@
         function watchAd() {
             if (typeof show_11452552 === 'function') {
                 show_11452552().then(() => {
-                    // एड कम्प्लीट होने पर स्क्रीन 1 छुपाएं और स्क्रीन 2 (Get Link) दिखाएं
+                    // जैसे ही यूज़र ऐड पूरा करके 'कट' (Close) पर क्लिक करेगा, पहली स्क्रीन छुप जाएगी और दूसरी स्क्रीन (Get Files) आ जाएगी।
                     document.getElementById("step1").style.display = "none";
                     document.getElementById("step2").style.display = "block";
                 }).catch((err) => {
@@ -104,8 +132,8 @@
             }
         }
 
-        function getLink() {
-            // 'Get Link' दबाने पर यूज़र Telegram Bot में डायरेक्ट चला जाएगा
+        function getFiles() {
+            // 'Get Files 🚀' पर क्लिक करते ही बोट पर रिडायरेक्ट हो जाएगा जहाँ फ़ाइल और क्रेडिट्स मिल जाएँगे।
             window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
         }
     </script>
