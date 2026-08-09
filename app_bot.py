@@ -52,6 +52,9 @@ BOT_USERNAME = "MyFile727_bot"
 MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
 ADMIN_ID = 5911965767
 AUTO_DELETE_SECONDS = 120  # 2 Minutes Auto-Delete
+
+# Database Channel ID (Make sure bot is admin in your DB channel)
+DB_CHANNEL_ID = -1002233445566  # Replace with your exact DB channel ID if needed
 # --------------------------------------------------
 
 # MongoDB Setup
@@ -286,7 +289,7 @@ async def handle_db_channel_post(update: Update, context: ContextTypes.DEFAULT_T
         "created_at": time.time()
     })
 
-# ----------------- GROUP SEARCH & HYPERLINK FORMATTER -----------------
+# ----------------- GROUP SEARCH & HYPERLINK FORMATTER (FIXED) -----------------
 async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or not msg.text or msg.text.startswith("/"):
@@ -314,12 +317,13 @@ async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE
     if results:
         elapsed = round(time.time() - start_time, 2)
         
+        # HTML Parse Mode Formatting for clean look
         response = (
-            f"🏷 **TITLE :** `{query_text}`\n"
-            f"📦 **TOTAL FILES :** {len(results)}\n"
-            f"⏰ **RESULT IN :** {elapsed} SECONDS\n\n"
-            f"📝 **REQUESTED BY :** {user_name}\n"
-            f"⚜️ **POWERED BY :** {BOT_USERNAME}\n\n"
+            f"🏷 <b>TITLE :</b> {query_text}\n"
+            f"📦 <b>TOTAL FILES :</b> {len(results)}\n"
+            f"⏰ <b>RESULT IN :</b> {elapsed} SECONDS\n\n"
+            f"📝 <b>REQUESTED BY :</b> {user_name}\n"
+            f"⚜️ <b>POWERED BY :</b> @{BOT_USERNAME}\n\n"
             f"<u><b>Your Requested Files Are Here</b></u>\n\n"
         )
 
@@ -330,14 +334,20 @@ async def handle_group_search(update: Update, context: ContextTypes.DEFAULT_TYPE
                 clean_title = clean_title[:57] + "..."
             
             bot_link = f"https://t.me/{BOT_USERNAME}?start={file_item['_id']}"
-            response += f"**{idx}.** [{clean_title}]({bot_link})\n\n"
+            response += f"<b>{idx}.</b> <a href='{bot_link}'>{clean_title}</a>\n\n"
 
-        sent_group_msg = await msg.reply_text(response, parse_mode="Markdown", disable_web_page_preview=True)
+        sent_group_msg = await msg.reply_text(
+            response, 
+            parse_mode="HTML", 
+            disable_web_page_preview=True
+        )
+
+        # 2-Minute Auto Delete for Group Message
         asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
     else:
         sent_group_msg = await msg.reply_text(
-            f"❌ **File Not Found!**\n\nYour request for `{query_text}` has been logged.",
-            parse_mode="Markdown"
+            f"❌ <b>File Not Found!</b>\n\nYour request for <code>{query_text}</code> has been logged.",
+            parse_mode="HTML"
         )
         asyncio.create_task(delete_message_after_delay(context.bot, msg.chat.id, [sent_group_msg.message_id], AUTO_DELETE_SECONDS))
 
@@ -396,4 +406,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-        
