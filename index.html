@@ -67,6 +67,11 @@
     .btn:active {
       transform: scale(0.98);
     }
+    .btn:disabled {
+      background: #475569 !important;
+      cursor: not-allowed;
+      box-shadow: none !important;
+    }
     .btn-success {
       background: linear-gradient(135deg, #16a34a, #15803d) !important;
       box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
@@ -100,7 +105,7 @@
       const desc = document.getElementById('cardDesc');
       const icon = document.getElementById('cardIcon');
 
-      // STEP 2: जब यूजर ऐड देखकर 'Get Files' बटन पर क्लिक करेगा
+      // STEP 2: "Get Files" पर क्लिक करने पर Telegram में वेरिफिकेशन डायरेक्ट भेजना
       if (isAdCompleted) {
         const redirectUrl = `https://t.me/${BOT_USERNAME}?start=VERIFY_AD`;
         if (tg && tg.openTelegramLink) {
@@ -114,30 +119,36 @@
         return;
       }
 
-      // STEP 1: Monetag Ad ट्रिगर करना
+      // STEP 1: Monetag Rewarded Ad ट्रिगर करना
       if (typeof show_8981394 === 'function') {
+        btn.disabled = true;
+        btn.innerText = "Loading Ad...";
+
         show_8981394()
           .then(() => {
-            // जैसे ही यूजर ऐड पूरा देखकर क्रॉस (X) बटन दबाएगा:
-            isAdCompleted = true;
-            icon.innerText = "🎉";
-            title.innerText = "Task Completed!";
-            desc.innerText = "Your ad verification is successful. Click below to get your file.";
-            btn.innerText = "Get Files 🚀";
-            btn.className = "btn btn-success";
+            // एड पूरा देखने और (X) दबाने के बाद:
+            btn.innerText = "Verifying Ad...";
+            
+            // 3 सेकंड का डिले ताकि Bot Side पर 14s टाइम चेकिंग 'Verification Failed' न करे
+            setTimeout(() => {
+              isAdCompleted = true;
+              icon.innerText = "🎉";
+              title.innerText = "Ad Completed!";
+              desc.innerText = "Your ad watch is verified. Click below to get your files.";
+              btn.disabled = false;
+              btn.innerText = "Get Files 🚀";
+              btn.className = "btn btn-success";
+            }, 3000);
           })
           .catch((err) => {
-            console.error("Ad error or closed early:", err);
-            // अगर एड किसी वजह से फेल हो, तो भी यूजर फंसे न
-            isAdCompleted = true;
-            btn.innerText = "Get Files 🚀";
-            btn.className = "btn btn-success";
+            console.error("Ad failed or closed:", err);
+            // एड बंद या एरर आने पर बटन को वापस रीसेट करें
+            btn.disabled = false;
+            btn.innerText = "Watch Ad to Unlock";
+            alert("Please watch the full ad to unlock your file!");
           });
       } else {
-        // SDK न मिलने पर डायरेक्ट गेट फाइल्स इनेबल करना
-        isAdCompleted = true;
-        btn.innerText = "Get Files 🚀";
-        btn.className = "btn btn-success";
+        alert("Ad provider not loaded yet. Please check internet or disable ad-blocker.");
       }
     }
   </script>
