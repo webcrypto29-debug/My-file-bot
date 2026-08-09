@@ -476,7 +476,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Commands
+    # Handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("togglead", toggle_ad))
@@ -489,12 +489,11 @@ def main():
     app.add_handler(CommandHandler("delchannel", del_channel))
     app.add_handler(CommandHandler("channels", list_channels))
     app.add_handler(CommandHandler("stats", stats_command))
-
-    # Callbacks & Messages
+    
     app.add_handler(CallbackQueryHandler(fsub_callback))
-    app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, handle_admin_media))
+    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_media))
 
-    print("🤖 Bot is starting...")
+    print("Bot is starting...")
     app.run_polling()
 
 if __name__ == "__main__":
