@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Watch Ad to Unlock File</title>
+    <title>Unlock Content</title>
 
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -55,35 +55,58 @@
             width: 100%;
             transition: background 0.2s;
         }
+        .btn-success {
+            background-color: #16a34a;
+        }
+        .btn-success:active {
+            background-color: #15803d;
+        }
         .btn:active {
             background-color: #1d4ed8;
+        }
+        /* सेकंड स्क्रीन को शुरू में छुपाने के लिए */
+        #step2 {
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <div class="card">
+    <!-- SCREEN 1: वॉच एड पेज -->
+    <div class="card" id="step1">
         <h2>🔒 Unlock Your Content</h2>
         <p>Watch a short ad completely to get <b>+3 Credits</b> and auto-download your file.</p>
         <button class="btn" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
     </div>
 
+    <!-- SCREEN 2: एड कम्प्लीट होने के बाद का 'Get Link' पेज -->
+    <div class="card" id="step2">
+        <h2 style="color: #4ade80;">🎉 Ad Completed!</h2>
+        <p>You have earned <b>+3 Credits</b>. Click below to claim your link and download your file.</p>
+        <button class="btn btn-success" onclick="getLink()">Get Link / Get File 📁</button>
+    </div>
+
     <script>
         const tg = window.Telegram.WebApp;
-        tg.expand(); // Mini App को फुल स्क्रीन मोड में खोलें
+        tg.expand();
 
         function watchAd() {
-            // Check if Monetag SDK is loaded
             if (typeof show_11452552 === 'function') {
                 show_11452552().then(() => {
-                    // Ad पूरा देखने के बाद Telegram Bot पर वापस भेजें
-                    window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
+                    // एड कम्प्लीट होने पर स्क्रीन 1 छुपाएं और स्क्रीन 2 (Get Link) दिखाएं
+                    document.getElementById("step1").style.display = "none";
+                    document.getElementById("step2").style.display = "block";
                 }).catch((err) => {
-                    alert("Ad skipped or failed to complete. Please watch full ad to unlock!");
+                    alert("Ad skipped or failed to complete. Please watch the full ad!");
                 });
             } else {
-                alert("Ad provider is still loading or blocked. Please wait 2 seconds, check your internet, or disable any Ad-Blocker/Private DNS!");
+                alert("Ad provider is still loading or blocked. Please wait 2 seconds, check internet, or disable Ad-Blocker/DNS!");
             }
+        }
+
+        function getLink() {
+            // 'Get Link' दबाने पर यूज़र Telegram Bot में डायरेक्ट चला जाएगा
+            window.location.href = "https://t.me/MyFile727_bot?start=VERIFY_AD";
         }
     </script>
 
