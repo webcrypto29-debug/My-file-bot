@@ -6,6 +6,7 @@ import urllib.request
 import json
 import pymongo
 import dns.resolver
+import uuid
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
@@ -118,7 +119,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2. Ad Verification Handler (FIXED: 14s -> 5s)
+    # 2. Ad Verification Handler (5s threshold)
     if args and args[0] == "VERIFY_AD":
         user_session = user_data.get(user_id)
         if not user_session:
@@ -132,7 +133,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         click_time = user_session.get("click_time", 0)
         time_elapsed = time.time() - click_time
 
-        # Verification Time reduced from 14s to 5s
         if time_elapsed < 5:
             await safe_reply(
                 "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed properly or finished too quickly. Please watch the ad fully.",
@@ -290,6 +290,7 @@ async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
     await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
 
+# --- GENLINK (FIXED) ---
 async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = update.message.reply_to_message
@@ -297,11 +298,10 @@ async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Reply to a message/media to generate a link!")
         return
 
-    import uuid
     unique_id = str(uuid.uuid4())[:8]
     item_type, file_id = "text", None
 
-    if msg.document: item_type, file_id = "file", msg.document.file_id
+    if msg.document: item_type, file_id = "document", msg.document.file_id
     elif msg.video: item_type, file_id = "video", msg.video.file_id
     elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
     elif msg.text: item_type = "text"
@@ -317,7 +317,7 @@ async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
     await update.message.reply_text(f"✅ **Single File Link Generated:**\n{link}", parse_mode="Markdown")
 
-# --- BATCH SYSTEM ---
+# --- BATCH SYSTEM (FIXED) ---
 batch_sessions = {}
 
 async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -331,7 +331,6 @@ async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Batch Mode cancelled (no files added).")
             return
 
-        import uuid
         batch_id = str(uuid.uuid4())[:8]
         batch_col.insert_one({"_id": batch_id, "files": files})
         del batch_sessions[admin_id]
@@ -350,11 +349,10 @@ async def handle_admin_media(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not msg or msg.from_user.id != ADMIN_ID: return
     if msg.from_user.id not in batch_sessions: return
 
-    import uuid
     unique_id = str(uuid.uuid4())[:8]
     item_type, file_id = "text", None
 
-    if msg.document: item_type, file_id = "file", msg.document.file_id
+    if msg.document: item_type, file_id = "document", msg.document.file_id
     elif msg.video: item_type, file_id = "video", msg.video.file_id
     elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
     elif msg.text: item_type = "text"
@@ -477,7 +475,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Handlers
+    # Handlers Registration
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("togglead", toggle_ad))
@@ -492,7 +490,9 @@ def main():
     app.add_handler(CommandHandler("stats", stats_command))
     
     app.add_handler(CallbackQueryHandler(fsub_callback))
-    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_media))
+    
+    # Text and Media Listener for Batching (Must be added last)
+    app.add_handler(MessageHandler((filters.TEXT | filters.ATTACHMENT) & (~filters.COMMAND), handle_admin_media))
 
     print("Bot is starting...")
     app.run_polling()
