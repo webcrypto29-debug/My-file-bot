@@ -2,11 +2,9 @@ import os
 import time
 import asyncio
 import threading
-import urllib.request
-import json
+import uuid
 import pymongo
 import dns.resolver
-import uuid
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
@@ -58,6 +56,10 @@ broadcast_history_col = db["broadcast_history"]
 
 user_data = {}
 broadcast_control = {"is_running": False}
+
+# Admin States for step-by-step commands
+admin_states = {} # {admin_id: "WAITING_FOR_SINGLE_FILE"}
+batch_sessions = {} # {admin_id: [file_ids]}
 
 def get_ad_status():
     st = settings_col.find_one({"_id": "ad_status"})
@@ -119,7 +121,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2. Ad Verification Handler (5s threshold)
+    # 2. Ad Verification Handler
     if args and args[0] == "VERIFY_AD":
         user_session = user_data.get(user_id)
         if not user_session:
@@ -269,16 +271,16 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     text = (
         "🛠 **Admin Commands Guide:**\n\n"
-        "🔗 `/genlink` - Reply to any media/text to generate a share link.\n"
-        "📦 `/batch` - Start/Stop batching multiple files into one link.\n"
-        "📢 `/sendad` - Reply to a message to broadcast to all users.\n"
-        "🛑 `/stopbroadcast` - Stop ongoing broadcast.\n"
-        "🗑 `/deletebroadcast` - Reply to broadcast to delete from users' PM.\n"
-        "➕ `/addchannel <id> <link> <title>` - Add Force Sub Channel.\n"
-        "➖ `/delchannel <id>` - Remove Force Sub Channel.\n"
-        "📑 `/channels` - List all Force Sub Channels.\n"
-        "🔘 `/togglead` - Enable/Disable Ads Mode.\n"
-        "📊 `/stats` - View total users and files."
+        "🔗 `/genlink` - Generate link (Send / Reply file/media/text)\n"
+        "📦 `/batch` - Start / Finish batching multiple files\n"
+        "📢 `/sendad` - Reply to message to broadcast\n"
+        "🛑 `/stopbroadcast` - Stop ongoing broadcast\n"
+        "🗑 `/deletebroadcast <id>` - Delete broadcast messages\n"
+        "➕ `/addchannel <id> <link> <title>` - Add Force Sub Channel\n"
+        "➖ `/delchannel <id>` - Remove Force Sub Channel\n"
+        "📑 `/channels` - List all Force Sub Channels\n"
+        "🔘 `/togglead` - Enable/Disable Ads Mode\n"
+        "📊 `/stats` - View total stats"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -290,36 +292,41 @@ async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
     await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
 
-# --- GENLINK (FIXED) ---
+# --- FIXED GENLINK COMMAND ---
 async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = update.message.reply_to_message
-    if not msg:
-        await update.message.reply_text("⚠️ Reply to a message/media to generate a link!")
+
+    # 1. If replied directly to a message
+    if msg:
+        unique_id = str(uuid.uuid4())[:8]
+        item_type, file_id = "text", None
+
+        if msg.document: item_type, file_id = "document", msg.document.file_id
+        elif msg.video: item_type, file_id = "video", msg.video.file_id
+        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+        elif msg.text: item_type = "text"
+
+        files_col.insert_one({
+            "_id": unique_id,
+            "item_type": item_type,
+            "file_id": file_id,
+            "caption": msg.caption or "",
+            "text": msg.text or ""
+        })
+
+        link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
+        await update.message.reply_text(f"✅ **Single File Link Generated:**\n\n`{link}`", parse_mode="Markdown")
         return
 
-    unique_id = str(uuid.uuid4())[:8]
-    item_type, file_id = "text", None
+    # 2. If not replied, wait for next message/file
+    admin_states[update.effective_user.id] = "WAITING_FOR_SINGLE_FILE"
+    await update.message.reply_text(
+        "📥 **Send or Forward the File / Photo / Video / Text now...**\nI will generate a shareable link for it!",
+        parse_mode="Markdown"
+    )
 
-    if msg.document: item_type, file_id = "document", msg.document.file_id
-    elif msg.video: item_type, file_id = "video", msg.video.file_id
-    elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-    elif msg.text: item_type = "text"
-
-    files_col.insert_one({
-        "_id": unique_id,
-        "item_type": item_type,
-        "file_id": file_id,
-        "caption": msg.caption or "",
-        "text": msg.text or ""
-    })
-
-    link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
-    await update.message.reply_text(f"✅ **Single File Link Generated:**\n{link}", parse_mode="Markdown")
-
-# --- BATCH SYSTEM (FIXED) ---
-batch_sessions = {}
-
+# --- FIXED BATCH COMMAND ---
 async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     admin_id = update.effective_user.id
@@ -328,7 +335,7 @@ async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         files = batch_sessions[admin_id]
         if not files:
             del batch_sessions[admin_id]
-            await update.message.reply_text("❌ Batch Mode cancelled (no files added).")
+            await update.message.reply_text("❌ Batch Mode cancelled (no files were added).")
             return
 
         batch_id = str(uuid.uuid4())[:8]
@@ -336,38 +343,68 @@ async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del batch_sessions[admin_id]
 
         link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
-        await update.message.reply_text(f"🎉 **Batch Created ({len(files)} files)!**\n\nLink: {link}", parse_mode="Markdown")
+        await update.message.reply_text(
+            f"🎉 **Batch Created ({len(files)} items)!**\n\n🔗 Shareable Link:\n`{link}`", 
+            parse_mode="Markdown"
+        )
     else:
         batch_sessions[admin_id] = []
         await update.message.reply_text(
-            "📦 **Batch Mode Started!**\n\nSend/Forward all files you want to include in this batch.\nWhen finished, type `/batch` again to generate the link.",
+            "📦 **Batch Mode Started!**\n\nNow send/forward all files/photos/videos/links you want to add.\n\nWhen done, type `/batch` again to generate the final batch link.",
             parse_mode="Markdown"
         )
 
-async def handle_admin_media(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# --- ADMIN MEDIA / MESSAGE LISTENER ---
+async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or msg.from_user.id != ADMIN_ID: return
-    if msg.from_user.id not in batch_sessions: return
+    admin_id = msg.from_user.id
 
-    unique_id = str(uuid.uuid4())[:8]
-    item_type, file_id = "text", None
+    # Check if waiting for a single file (/genlink)
+    if admin_states.get(admin_id) == "WAITING_FOR_SINGLE_FILE":
+        unique_id = str(uuid.uuid4())[:8]
+        item_type, file_id = "text", None
 
-    if msg.document: item_type, file_id = "document", msg.document.file_id
-    elif msg.video: item_type, file_id = "video", msg.video.file_id
-    elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-    elif msg.text: item_type = "text"
+        if msg.document: item_type, file_id = "document", msg.document.file_id
+        elif msg.video: item_type, file_id = "video", msg.video.file_id
+        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+        elif msg.text: item_type = "text"
 
-    files_col.insert_one({
-        "_id": unique_id,
-        "item_type": item_type,
-        "file_id": file_id,
-        "caption": msg.caption or "",
-        "text": msg.text or ""
-    })
+        files_col.insert_one({
+            "_id": unique_id,
+            "item_type": item_type,
+            "file_id": file_id,
+            "caption": msg.caption or "",
+            "text": msg.text or ""
+        })
 
-    batch_sessions[msg.from_user.id].append(unique_id)
-    count = len(batch_sessions[msg.from_user.id])
-    await update.message.reply_text(f"➕ Added file #{count} to Batch.")
+        del admin_states[admin_id]
+        link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
+        await update.message.reply_text(f"✅ **Single Link Generated:**\n\n`{link}`", parse_mode="Markdown")
+        return
+
+    # Check if in Batch Session (/batch)
+    if admin_id in batch_sessions:
+        unique_id = str(uuid.uuid4())[:8]
+        item_type, file_id = "text", None
+
+        if msg.document: item_type, file_id = "document", msg.document.file_id
+        elif msg.video: item_type, file_id = "video", msg.video.file_id
+        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+        elif msg.text: item_type = "text"
+
+        files_col.insert_one({
+            "_id": unique_id,
+            "item_type": item_type,
+            "file_id": file_id,
+            "caption": msg.caption or "",
+            "text": msg.text or ""
+        })
+
+        batch_sessions[admin_id].append(unique_id)
+        count = len(batch_sessions[admin_id])
+        await update.message.reply_text(f"➕ Added item #{count} to Batch. (Send more or type `/batch` to finish)")
+        return
 
 # --- BROADCAST SYSTEM ---
 async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -491,8 +528,8 @@ def main():
     
     app.add_handler(CallbackQueryHandler(fsub_callback))
     
-    # Text and Media Listener for Batching (Must be added last)
-    app.add_handler(MessageHandler((filters.TEXT | filters.ATTACHMENT) & (~filters.COMMAND), handle_admin_media))
+    # Catch ALL messages/files sent by admin when genlink or batch is active
+    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
     print("Bot is starting...")
     app.run_polling()
