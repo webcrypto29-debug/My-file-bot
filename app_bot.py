@@ -28,7 +28,7 @@ def run_web_server():
 
 threading.Thread(target=run_web_server, daemon=True).start()
 
-# Termux DNS Fix
+# Termux / DNS Fix
 try:
     dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
     dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
@@ -36,16 +36,17 @@ except Exception:
     pass
 
 # ----------------- CONFIGURATION -----------------
-TOKEN = "8737537284:AAGtP8lwqR3LRwAy4ZWg5iyQG8SdNcFW6fg"
+# NOTE: कृपया सुनिश्चित करें कि BotFather से नया टोकन लेकर यहाँ डालें अगर पुराना Revoke हो गया हो।
+TOKEN = os.environ.get("BOT_TOKEN", "8737537284:AAGtP8lwqR3LRwAy4ZWg5iyQG8SdNcFW6fg")
 MINI_APP_URL = "https://webcrypto29-debug.github.io/My-file-bot/"
 BOT_USERNAME = "MyFile727_bot"
 
-MONGO_URI = "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true"
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true")
 ADMIN_ID = 5911965767
 # --------------------------------------------------
 
-# MongoDB Setup
-mongo_client = pymongo.MongoClient(MONGO_URI)
+# MongoDB Setup (Connect Timeout जोड़ा गया है ताकि DB ब्लॉक न करे)
+mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 db = mongo_client["FileBotDB"]
 files_col = db["files"]
 batch_col = db["batches"]
@@ -61,14 +62,22 @@ admin_states = {}
 batch_sessions = {}
 
 def get_ad_status():
-    st = settings_col.find_one({"_id": "ad_status"})
-    if st:
-        return st.get("status", True)
+    try:
+        st = settings_col.find_one({"_id": "ad_status"})
+        if st:
+            return st.get("status", True)
+    except Exception as e:
+        print(f"DB Error (get_ad_status): {e}")
     return True
 
 # ----------------- HELPER: FORCE SUB CHECK -----------------
 async def check_force_sub(bot, user_id):
-    channels = list(channels_col.find())
+    try:
+        channels = await asyncio.to_thread(lambda: list(channels_col.find()))
+    except Exception as e:
+        print(f"DB Error (check_force_sub): {e}")
+        channels = []
+
     unjoined = []
     for ch in channels:
         ch_id = ch["_id"]
@@ -76,8 +85,8 @@ async def check_force_sub(bot, user_id):
             member = await bot.get_chat_member(chat_id=ch_id, user_id=user_id)
             if member.status not in ["member", "administrator", "creator"]:
                 unjoined.append(ch)
-        except Exception:
-            # अगर बोट रिमूव हो गया हो या एरर आए
+        except Exception as e:
+            print(f"Force Sub Check Error for {ch_id}: {e}")
             pass
     return unjoined
 
@@ -88,28 +97,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user_id = user.id
     
-    # Text source & reply wrapper
+    # Callback query response safety
+    if update.callback_query:
+        try:
+            await update.callback_query.answer()
+        except Exception:
+            pass
+
     is_callback = update.callback_query is not None
     
     async def send_response(text, reply_markup=None, parse_mode="Markdown"):
         try:
-            if is_callback:
-                await update.callback_query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+            if is_callback and update.callback_query.message:
+                await update.callback_query.message.edit_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
             else:
-                await update.message.reply_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
-        except Exception:
+                await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+        except Exception as e:
+            print(f"Send Response Error: {e}")
             await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
 
-    # Context args
     args = context.args if hasattr(context, "args") and context.args else []
 
-    # Database User Reg
-    user_doc = users_col.find_one({"_id": user_id})
-    if not user_doc:
-        users_col.insert_one({"_id": user_id, "credits": 0})
+    # Database User Reg (Non-blocking thread)
+    try:
+        user_doc = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
+        if not user_doc:
+            await asyncio.to_thread(users_col.insert_one, {"_id": user_id, "credits": 0})
+            current_credits = 0
+        else:
+            current_credits = user_doc.get("credits", 0)
+    except Exception as e:
+        print(f"User Reg DB Error: {e}")
         current_credits = 0
-    else:
-        current_credits = user_doc.get("credits", 0)
 
     # 1. FORCE SUB VERIFICATION
     unjoined = await check_force_sub(context.bot, user_id)
@@ -123,24 +142,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keyboard.append([InlineKeyboardButton("Joined! Check Now 🔄", callback_data=f"check_fsub_{param_val}")])
         
         msg_text = "⚠️ **Must Join Channels!**\n\nTo access files/links, please join our required channels first:"
-        
-        if is_callback:
-            try:
-                await update.callback_query.message.edit_text(msg_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
-            except Exception:
-                await send_response(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
-        else:
-            await send_response(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        await send_response(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
     # 2. AD VERIFICATION LOGIC
     if args and len(args) > 0 and args[0] == "VERIFY_AD":
-        user_session = sessions_col.find_one({"_id": user_id})
+        user_session = await asyncio.to_thread(sessions_col.find_one, {"_id": user_id})
         
         if not user_session:
-            users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
-            updated_user = users_col.find_one({"_id": user_id})
-            new_bal = updated_user.get("credits", 0)
+            await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": 3}}, True)
+            updated_user = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
+            new_bal = updated_user.get("credits", 0) if updated_user else 3
             await send_response(
                 f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_bal} Credits**"
             )
@@ -157,25 +169,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        sessions_col.update_one({"_id": user_id}, {"$set": {"verified": True}})
-        users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
-        updated_user = users_col.find_one({"_id": user_id})
-        new_balance = updated_user.get("credits", 0)
+        await asyncio.to_thread(sessions_col.update_one, {"_id": user_id}, {"$set": {"verified": True}})
+        await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": 3}}, True)
+        updated_user = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
+        new_balance = updated_user.get("credits", 0) if updated_user else 3
 
         await send_response(
             f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_balance} Credits**"
         )
 
         if new_balance >= 1:
-            users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
+            await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": -1}})
             await send_requested_item_direct(context, user_id, user_session, deduct_credit=True)
         return
 
     # 3. FILE / BATCH DOWNLOAD REQUEST
     if args and len(args) > 0 and args[0] not in ["NO_PARAM", "None"]:
         param = args[0]
-        file_doc = files_col.find_one({"_id": param})
-        batch_doc = batch_col.find_one({"_id": param})
+        file_doc = await asyncio.to_thread(files_col.find_one, {"_id": param})
+        batch_doc = await asyncio.to_thread(batch_col.find_one, {"_id": param})
 
         if file_doc or batch_doc:
             session_info = {
@@ -185,14 +197,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "verified": False,
                 "click_time": time.time()
             }
-            sessions_col.update_one({"_id": user_id}, {"$set": session_info}, upsert=True)
+            await asyncio.to_thread(sessions_col.update_one, {"_id": user_id}, {"$set": session_info}, True)
 
             if not get_ad_status():
                 await send_requested_item_direct(context, user_id, session_info, deduct_credit=False)
                 return
 
             if current_credits >= 1:
-                users_col.update_one({"_id": user_id}, {"$inc": {"credits": -1}})
+                await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": -1}})
                 await send_requested_item_direct(context, user_id, session_info, deduct_credit=True)
                 return
 
@@ -218,7 +230,7 @@ async def send_requested_item_direct(context, user_id, session, deduct_credit=Tr
 
     try:
         if item_type == "single":
-            doc = files_col.find_one({"_id": item_id})
+            doc = await asyncio.to_thread(files_col.find_one, {"_id": item_id})
             if doc:
                 itype = doc.get("item_type")
                 cap = doc.get("caption", "")
@@ -232,10 +244,10 @@ async def send_requested_item_direct(context, user_id, session, deduct_credit=Tr
                     await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap)
 
         elif item_type == "batch":
-            batch_doc = batch_col.find_one({"_id": item_id})
+            batch_doc = await asyncio.to_thread(batch_col.find_one, {"_id": item_id})
             if batch_doc:
-                for f_id in batch_doc["files"]:
-                    doc = files_col.find_one({"_id": f_id})
+                for f_id in batch_doc.get("files", []):
+                    doc = await asyncio.to_thread(files_col.find_one, {"_id": f_id})
                     if doc:
                         itype = doc.get("item_type")
                         cap = doc.get("caption", "")
@@ -252,7 +264,7 @@ async def send_requested_item_direct(context, user_id, session, deduct_credit=Tr
     except Exception as e:
         await context.bot.send_message(chat_id=user_id, text=f"❌ Error delivering content: {str(e)}")
 
-    sessions_col.delete_one({"_id": user_id})
+    await asyncio.to_thread(sessions_col.delete_one, {"_id": user_id})
 
 # ----------------- CALLBACK QUERY HANDLER -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -301,14 +313,15 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 invite_link = f"https://t.me/{str(chat.id).replace('-100', '')}"
 
-        channels_col.update_one(
+        await asyncio.to_thread(
+            channels_col.update_one,
             {"_id": chat.id},
             {"$set": {
                 "link": invite_link, 
                 "title": chat.title, 
                 "username": chat.username.lower() if chat.username else ""
             }},
-            upsert=True
+            True
         )
 
         await update.message.reply_text(
@@ -333,11 +346,11 @@ async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     deleted_count = 0
     if raw_input.replace("-", "").isdigit():
-        res = channels_col.delete_one({"_id": int(raw_input)})
+        res = await asyncio.to_thread(channels_col.delete_one, {"_id": int(raw_input)})
         deleted_count = res.deleted_count
     else:
         clean_user = raw_input.replace("@", "").lower()
-        res = channels_col.delete_many({
+        res = await asyncio.to_thread(channels_col.delete_many, {
             "$or": [
                 {"username": clean_user},
                 {"_id": raw_input}
@@ -352,7 +365,7 @@ async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
-    chs = list(channels_col.find())
+    chs = await asyncio.to_thread(lambda: list(channels_col.find()))
     if not chs:
         await update.message.reply_text("📑 No Force Sub channels registered.")
         return
@@ -381,7 +394,7 @@ async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     current = get_ad_status()
     new_status = not current
-    settings_col.update_one({"_id": "ad_status"}, {"$set": {"status": new_status}}, upsert=True)
+    await asyncio.to_thread(settings_col.update_one, {"_id": "ad_status"}, {"$set": {"status": new_status}}, True)
     status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
     await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
 
@@ -398,7 +411,7 @@ async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
         elif msg.text: item_type = "text"
 
-        files_col.insert_one({
+        await asyncio.to_thread(files_col.insert_one, {
             "_id": unique_id,
             "item_type": item_type,
             "file_id": file_id,
@@ -425,7 +438,7 @@ async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         batch_id = str(uuid.uuid4())[:8]
-        batch_col.insert_one({"_id": batch_id, "files": files})
+        await asyncio.to_thread(batch_col.insert_one, {"_id": batch_id, "files": files})
         del batch_sessions[admin_id]
 
         link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
@@ -448,7 +461,7 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
         elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
         elif msg.text: item_type = "text"
 
-        files_col.insert_one({
+        await asyncio.to_thread(files_col.insert_one, {
             "_id": unique_id,
             "item_type": item_type,
             "file_id": file_id,
@@ -470,7 +483,7 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
         elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
         elif msg.text: item_type = "text"
 
-        files_col.insert_one({
+        await asyncio.to_thread(files_col.insert_one, {
             "_id": unique_id,
             "item_type": item_type,
             "file_id": file_id,
@@ -491,7 +504,7 @@ async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     broadcast_control["is_running"] = True
-    users = list(users_col.find())
+    users = await asyncio.to_thread(lambda: list(users_col.find()))
     total = len(users)
     success, failed = 0, 0
     broadcast_id = str(int(time.time()))
@@ -512,15 +525,15 @@ async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
             failed += 1
         await asyncio.sleep(0.05)
 
-    broadcast_history_col.insert_one({"_id": broadcast_id, "sent_details": sent_details})
+    await asyncio.to_thread(broadcast_history_col.insert_one, {"_id": broadcast_id, "sent_details": sent_details})
     broadcast_control["is_running"] = False
     await status_msg.edit_text(f"✅ **Broadcast Completed!**\n🎯 Success: {success}\n❌ Failed: {failed}", parse_mode="Markdown")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
-    total_users = users_col.count_documents({})
-    total_files = files_col.count_documents({})
-    total_batches = batch_col.count_documents({})
+    total_users = await asyncio.to_thread(users_col.count_documents, {})
+    total_files = await asyncio.to_thread(files_col.count_documents, {})
+    total_batches = await asyncio.to_thread(batch_col.count_documents, {})
     await update.message.reply_text(f"📊 **Stats:**\n👥 Users: {total_users}\n📁 Files: {total_files}\n📦 Batches: {total_batches}")
 
 # ----------------- MAIN INITIALIZATION -----------------
@@ -542,7 +555,7 @@ def main():
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
     print("Bot started with synchronized handlers.")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
