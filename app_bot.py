@@ -36,7 +36,6 @@ except Exception:
     pass
 
 # ----------------- CONFIGURATION -----------------
-# NOTE: कृपया सुनिश्चित करें कि BotFather से नया टोकन लेकर यहाँ डालें अगर पुराना Revoke हो गया हो।
 TOKEN = os.environ.get("BOT_TOKEN", "8737537284:AAGtP8lwqR3LRwAy4ZWg5iyQG8SdNcFW6fg")
 MINI_APP_URL = "https://webcrypto29-debug.github.io/My-file-bot/"
 BOT_USERNAME = "MyFile727_bot"
@@ -45,7 +44,7 @@ MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://n2665099_db_user:sagar_sa
 ADMIN_ID = 5911965767
 # --------------------------------------------------
 
-# MongoDB Setup (Connect Timeout जोड़ा गया है ताकि DB ब्लॉक न करे)
+# MongoDB Setup
 mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 db = mongo_client["FileBotDB"]
 files_col = db["files"]
@@ -56,8 +55,14 @@ settings_col = db["settings"]
 broadcast_history_col = db["broadcast_history"]
 sessions_col = db["sessions"]
 
-broadcast_control = {"is_running": False}
+# 💥 पुराने सभी Force Sub चैनल्स को क्लियर करने का कोड
+try:
+    channels_col.delete_many({})
+    print("✅ All previous Force Sub channels cleared successfully from Database!")
+except Exception as e:
+    print(f"Error clearing channels: {e}")
 
+broadcast_control = {"is_running": False}
 admin_states = {}
 batch_sessions = {}
 
@@ -75,19 +80,29 @@ async def check_force_sub(bot, user_id):
     try:
         channels = await asyncio.to_thread(lambda: list(channels_col.find()))
     except Exception as e:
-        print(f"DB Error (check_force_sub): {e}")
-        channels = []
+        print(f"DB Error fetching channels: {e}")
+        return []
+
+    if not channels:
+        return []
 
     unjoined = []
     for ch in channels:
         ch_id = ch["_id"]
         try:
-            member = await bot.get_chat_member(chat_id=ch_id, user_id=user_id)
+            member = await asyncio.wait_for(
+                bot.get_chat_member(chat_id=ch_id, user_id=user_id),
+                timeout=2.5
+            )
             if member.status not in ["member", "administrator", "creator"]:
                 unjoined.append(ch)
+        except asyncio.TimeoutError:
+            print(f"Force Sub Timeout for channel {ch_id}.")
+            continue
         except Exception as e:
-            print(f"Force Sub Check Error for {ch_id}: {e}")
-            pass
+            print(f"Error checking channel {ch_id}: {e}")
+            continue
+            
     return unjoined
 
 # ----------------- CORE START & FLOW HANDLER -----------------
@@ -97,28 +112,29 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user_id = user.id
     
-    # Callback query response safety
-    if update.callback_query:
+    is_callback = update.callback_query is not None
+    if is_callback:
         try:
             await update.callback_query.answer()
         except Exception:
             pass
-
-    is_callback = update.callback_query is not None
     
     async def send_response(text, reply_markup=None, parse_mode="Markdown"):
         try:
-            if is_callback and update.callback_query.message:
+            if is_callback and update.callback_query and update.callback_query.message:
                 await update.callback_query.message.edit_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
             else:
                 await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
         except Exception as e:
             print(f"Send Response Error: {e}")
-            await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+            try:
+                await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+            except Exception:
+                pass
 
     args = context.args if hasattr(context, "args") and context.args else []
 
-    # Database User Reg (Non-blocking thread)
+    # Database User Registration
     try:
         user_doc = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
         if not user_doc:
@@ -127,7 +143,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             current_credits = user_doc.get("credits", 0)
     except Exception as e:
-        print(f"User Reg DB Error: {e}")
+        print(f"User DB Registration Error: {e}")
         current_credits = 0
 
     # 1. FORCE SUB VERIFICATION
@@ -276,30 +292,42 @@ async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         param = data.replace("check_fsub_", "")
         unjoined = await check_force_sub(context.bot, user_id)
         if unjoined:
-            await query.answer("❌ You haven't joined all required channels yet!", show_alert=True)
+            try:
+                await query.answer("❌ You haven't joined all required channels yet!", show_alert=True)
+            except Exception:
+                pass
         else:
-            await query.answer("✅ Verification successful!")
+            try:
+                await query.answer("✅ Verification successful!")
+            except Exception:
+                pass
             context.args = [param] if param not in ["NO_PARAM", "None"] else []
             await start(update, context)
 
-# ----------------- ADD & DELETE FORCE SUB CHANNELS -----------------
+# ----------------- ADD & DELETE FORCE SUB CHANNELS (SUPER SIMPLE) -----------------
 async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ Usage:\n`/addchannel @channelusername` OR `/addchannel -100xxxxxxxxxx`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ **इस्तेमाल कैसे करें:**\n`/addchannel https://t.me/yourchannel`\nया\n`/addchannel @yourchannel`", parse_mode="Markdown")
         return
 
     raw_input = args[0].strip()
-    ch_id = int(raw_input) if raw_input.replace("-", "").isdigit() else raw_input
+    
+    # Extract Username/ID/Link automatically
+    target_chat = raw_input
+    if "t.me/" in raw_input:
+        target_chat = "@" + raw_input.split("t.me/")[-1].replace("+", "").replace("/", "")
+    elif raw_input.replace("-", "").isdigit():
+        target_chat = int(raw_input)
 
     try:
-        chat = await context.bot.get_chat(ch_id)
+        chat = await context.bot.get_chat(target_chat)
         bot_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=context.bot.id)
 
         if bot_member.status not in ["administrator", "creator"]:
             await update.message.reply_text(
-                f"❌ **Bot is not an Admin!**\n\nPlease add @{BOT_USERNAME} as an **Admin** in **{chat.title}** first, then re-run this command.",
+                f"❌ **बोट एडमिन नहीं है!**\n\nकृपया पहले @{BOT_USERNAME} को **{chat.title}** में **Admin** बनाएँ, फिर इस कमांड को चलाएँ।",
                 parse_mode="Markdown"
             )
             return
@@ -311,7 +339,7 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 invite_link = await context.bot.export_chat_invite_link(chat.id)
             except Exception:
-                invite_link = f"https://t.me/{str(chat.id).replace('-100', '')}"
+                invite_link = raw_input if "t.me" in raw_input else f"https://t.me/{str(chat.id).replace('-100', '')}"
 
         await asyncio.to_thread(
             channels_col.update_one,
@@ -319,19 +347,20 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             {"$set": {
                 "link": invite_link, 
                 "title": chat.title, 
-                "username": chat.username.lower() if chat.username else ""
+                "username": chat.username.lower() if chat.username else "",
+                "raw_link": raw_input
             }},
             True
         )
 
         await update.message.reply_text(
-            f"✅ **Force Sub Channel Added Successfully!**\n\n📌 **Title:** {chat.title}\n🆔 **ID:** `{chat.id}`\n🔗 **Link:** {invite_link}",
+            f"✅ **Force Sub Channel Added!**\n\n📌 **Title:** {chat.title}\n🆔 **ID:** `{chat.id}`\n🔗 **Link:** {invite_link}",
             parse_mode="Markdown"
         )
 
     except Exception as e:
         await update.message.reply_text(
-            f"❌ **Error accessing channel!**\n\nMake sure the Bot is added to the channel and the Username/ID is correct.\n\n`Error: {str(e)}`",
+            f"❌ **चैनल जोड़ने में समस्या!**\n\nसुनिश्चित करें कि आपने बोट को चैनल में Admin बनाया है।\n\n`Error: {str(e)}`",
             parse_mode="Markdown"
         )
 
@@ -339,35 +368,36 @@ async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ Usage:\n`/delchannel @channelusername` OR `/delchannel -100xxxxxxxxxx`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ **इस्तेमाल कैसे करें:**\n`/delchannel https://t.me/yourchannel`\nया\n`/delchannel @yourchannel`", parse_mode="Markdown")
         return
 
     raw_input = args[0].strip()
+    clean_input = raw_input.replace("https://t.me/", "").replace("@", "").lower()
     
     deleted_count = 0
     if raw_input.replace("-", "").isdigit():
         res = await asyncio.to_thread(channels_col.delete_one, {"_id": int(raw_input)})
         deleted_count = res.deleted_count
     else:
-        clean_user = raw_input.replace("@", "").lower()
         res = await asyncio.to_thread(channels_col.delete_many, {
             "$or": [
-                {"username": clean_user},
-                {"_id": raw_input}
+                {"username": clean_input},
+                {"raw_link": raw_input},
+                {"link": raw_input}
             ]
         })
         deleted_count = res.deleted_count
 
     if deleted_count > 0:
-        await update.message.reply_text("✅ Force Sub Channel removed successfully!")
+        await update.message.reply_text("✅ Force Sub चैनल सफलतापूर्वक हटा दिया गया!")
     else:
-        await update.message.reply_text("❌ Channel not found in database!")
+        await update.message.reply_text("❌ यह चैनल डेटाबेस में नहीं मिला!")
 
 async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     chs = await asyncio.to_thread(lambda: list(channels_col.find()))
     if not chs:
-        await update.message.reply_text("📑 No Force Sub channels registered.")
+        await update.message.reply_text("📑 कोई Force Sub चैनल रजिस्टर्ड नहीं है।")
         return
     text = "📢 **Active Force Sub Channels:**\n\n"
     for c in chs:
@@ -382,8 +412,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔗 `/genlink` - Generate link\n"
         "📦 `/batch` - Create file batch\n"
         "📢 `/sendad` - Broadcast message\n"
-        "➕ `/addchannel <username_or_id>` - Add Force Sub\n"
-        "➖ `/delchannel <username_or_id>` - Remove Force Sub\n"
+        "➕ `/addchannel <link_or_username>` - Add Force Sub\n"
+        "➖ `/delchannel <link_or_username>` - Remove Force Sub\n"
         "📑 `/channels` - List Force Sub channels\n"
         "🔘 `/togglead` - Toggle rewarded ads\n"
         "📊 `/stats` - View stats"
