@@ -53,8 +53,8 @@ users_col = db["users"]
 channels_col = db["fsub_channels"]
 settings_col = db["settings"]
 broadcast_history_col = db["broadcast_history"]
+sessions_col = db["sessions"]  # FIXED: Persistent session management in MongoDB
 
-user_data = {}
 broadcast_control = {"is_running": False}
 
 # Admin States for step-by-step commands
@@ -96,6 +96,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
 
+    # User registration in database
     user_doc = users_col.find_one({"_id": user_id})
     if not user_doc:
         users_col.insert_one({"_id": user_id, "credits": 0})
@@ -123,9 +124,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 2. Ad Verification Handler
     if args and args[0] == "VERIFY_AD":
-        user_session = user_data.get(user_id)
+        user_session = sessions_col.find_one({"_id": user_id})
+        
+        # If session missing or no active request, assign default free reward
         if not user_session:
-            await safe_reply("⚠️ No active file request found. Please click a share link first!")
+            users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
+            updated_user = users_col.find_one({"_id": user_id})
+            new_bal = updated_user.get("credits", 0)
+            await safe_reply(
+                f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_bal} Credits**\n\nClick any file link to use your credits!",
+                parse_mode="Markdown"
+            )
             return
 
         if user_session.get("verified", False):
@@ -135,14 +144,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         click_time = user_session.get("click_time", 0)
         time_elapsed = time.time() - click_time
 
-        if time_elapsed < 5:
+        if time_elapsed < 3:
             await safe_reply(
                 "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed properly or finished too quickly. Please watch the ad fully.",
                 parse_mode="Markdown"
             )
             return
 
-        user_session["verified"] = True
+        # Update Session & Credits
+        sessions_col.update_one({"_id": user_id}, {"$set": {"verified": True}})
         users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
         updated_user = users_col.find_one({"_id": user_id})
         new_balance = updated_user.get("credits", 0)
@@ -165,12 +175,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if file_doc or batch_doc:
             session_info = {
+                "_id": user_id,
                 "type": "batch" if batch_doc else "single",
                 "id": param,
                 "verified": False,
                 "click_time": time.time()
             }
-            user_data[user_id] = session_info
+            # Save session directly to MongoDB Database
+            sessions_col.update_one({"_id": user_id}, {"$set": session_info}, upsert=True)
 
             if not get_ad_status():
                 await send_requested_item_direct(update, context, user_id, session_info, deduct_credit=False)
@@ -242,8 +254,8 @@ async def send_requested_item_direct(update, context, user_id, session, deduct_c
     except Exception as e:
         await context.bot.send_message(chat_id=user_id, text=f"❌ Error delivering file: {str(e)}")
 
-    if user_id in user_data:
-        del user_data[user_id]
+    # Clean session from Database
+    sessions_col.delete_one({"_id": user_id})
 
 # ----------------- CALLBACK HANDLER -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -297,7 +309,6 @@ async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = update.message.reply_to_message
 
-    # 1. If replied directly to a message
     if msg:
         unique_id = str(uuid.uuid4())[:8]
         item_type, file_id = "text", None
@@ -319,7 +330,6 @@ async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ **Single File Link Generated:**\n\n`{link}`", parse_mode="Markdown")
         return
 
-    # 2. If not replied, wait for next message/file
     admin_states[update.effective_user.id] = "WAITING_FOR_SINGLE_FILE"
     await update.message.reply_text(
         "📥 **Send or Forward the File / Photo / Video / Text now...**\nI will generate a shareable link for it!",
@@ -360,7 +370,6 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
     if not msg or msg.from_user.id != ADMIN_ID: return
     admin_id = msg.from_user.id
 
-    # Check if waiting for a single file (/genlink)
     if admin_states.get(admin_id) == "WAITING_FOR_SINGLE_FILE":
         unique_id = str(uuid.uuid4())[:8]
         item_type, file_id = "text", None
@@ -383,7 +392,6 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"✅ **Single Link Generated:**\n\n`{link}`", parse_mode="Markdown")
         return
 
-    # Check if in Batch Session (/batch)
     if admin_id in batch_sessions:
         unique_id = str(uuid.uuid4())[:8]
         item_type, file_id = "text", None
