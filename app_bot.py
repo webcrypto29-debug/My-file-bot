@@ -1,4 +1,4 @@
-import os
+Import os
 import time
 import asyncio
 import threading
@@ -53,13 +53,13 @@ users_col = db["users"]
 channels_col = db["fsub_channels"]
 settings_col = db["settings"]
 broadcast_history_col = db["broadcast_history"]
-sessions_col = db["sessions"]
 
+user_data = {}
 broadcast_control = {"is_running": False}
 
-# Admin States
-admin_states = {}
-batch_sessions = {}
+# Admin States for step-by-step commands
+admin_states = {} # {admin_id: "WAITING_FOR_SINGLE_FILE"}
+batch_sessions = {} # {admin_id: [file_ids]}
 
 def get_ad_status():
     st = settings_col.find_one({"_id": "ad_status"})
@@ -96,7 +96,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
 
-    # User registration in database
     user_doc = users_col.find_one({"_id": user_id})
     if not user_doc:
         users_col.insert_one({"_id": user_id, "credits": 0})
@@ -124,16 +123,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 2. Ad Verification Handler
     if args and args[0] == "VERIFY_AD":
-        user_session = sessions_col.find_one({"_id": user_id})
-        
+        user_session = user_data.get(user_id)
         if not user_session:
-            users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
-            updated_user = users_col.find_one({"_id": user_id})
-            new_bal = updated_user.get("credits", 0)
-            await safe_reply(
-                f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_bal} Credits**\n\nClick any file link to use your credits!",
-                parse_mode="Markdown"
-            )
+            await safe_reply("⚠️ No active file request found. Please click a share link first!")
             return
 
         if user_session.get("verified", False):
@@ -143,15 +135,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         click_time = user_session.get("click_time", 0)
         time_elapsed = time.time() - click_time
 
-        if time_elapsed < 3:
+        if time_elapsed < 5:
             await safe_reply(
                 "⚠️ **Verification Failed!**\n\nThe rewarded ad was not completed properly or finished too quickly. Please watch the ad fully.",
                 parse_mode="Markdown"
             )
             return
 
-        # Update Session & Credits
-        sessions_col.update_one({"_id": user_id}, {"$set": {"verified": True}})
+        user_session["verified"] = True
         users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
         updated_user = users_col.find_one({"_id": user_id})
         new_balance = updated_user.get("credits", 0)
@@ -174,13 +165,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if file_doc or batch_doc:
             session_info = {
-                "_id": user_id,
                 "type": "batch" if batch_doc else "single",
                 "id": param,
                 "verified": False,
                 "click_time": time.time()
             }
-            sessions_col.update_one({"_id": user_id}, {"$set": session_info}, upsert=True)
+            user_data[user_id] = session_info
 
             if not get_ad_status():
                 await send_requested_item_direct(update, context, user_id, session_info, deduct_credit=False)
@@ -252,7 +242,8 @@ async def send_requested_item_direct(update, context, user_id, session, deduct_c
     except Exception as e:
         await context.bot.send_message(chat_id=user_id, text=f"❌ Error delivering file: {str(e)}")
 
-    sessions_col.delete_one({"_id": user_id})
+    if user_id in user_data:
+        del user_data[user_id]
 
 # ----------------- CALLBACK HANDLER -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -301,10 +292,12 @@ async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
     await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
 
+# --- FIXED GENLINK COMMAND ---
 async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = update.message.reply_to_message
 
+    # 1. If replied directly to a message
     if msg:
         unique_id = str(uuid.uuid4())[:8]
         item_type, file_id = "text", None
@@ -326,12 +319,14 @@ async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"✅ **Single File Link Generated:**\n\n`{link}`", parse_mode="Markdown")
         return
 
+    # 2. If not replied, wait for next message/file
     admin_states[update.effective_user.id] = "WAITING_FOR_SINGLE_FILE"
     await update.message.reply_text(
         "📥 **Send or Forward the File / Photo / Video / Text now...**\nI will generate a shareable link for it!",
         parse_mode="Markdown"
     )
 
+# --- FIXED BATCH COMMAND ---
 async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     admin_id = update.effective_user.id
@@ -359,11 +354,13 @@ async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
+# --- ADMIN MEDIA / MESSAGE LISTENER ---
 async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     if not msg or msg.from_user.id != ADMIN_ID: return
     admin_id = msg.from_user.id
 
+    # Check if waiting for a single file (/genlink)
     if admin_states.get(admin_id) == "WAITING_FOR_SINGLE_FILE":
         unique_id = str(uuid.uuid4())[:8]
         item_type, file_id = "text", None
@@ -386,6 +383,7 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"✅ **Single Link Generated:**\n\n`{link}`", parse_mode="Markdown")
         return
 
+    # Check if in Batch Session (/batch)
     if admin_id in batch_sessions:
         unique_id = str(uuid.uuid4())[:8]
         item_type, file_id = "text", None
@@ -408,6 +406,7 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
         await update.message.reply_text(f"➕ Added item #{count} to Batch. (Send more or type `/batch` to finish)")
         return
 
+# --- BROADCAST SYSTEM ---
 async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     msg = update.message.reply_to_message
@@ -470,6 +469,7 @@ async def delete_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     broadcast_history_col.delete_one({"_id": b_id})
     await update.message.reply_text(f"🗑 Deleted {del_success} broadcast messages.")
 
+# --- FORCE SUB SYSTEM ---
 async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
@@ -478,9 +478,8 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     ch_id = int(args[0]) if args[0].replace("-", "").isdigit() else args[0]
     channels_col.update_one({"_id": ch_id}, {"$set": {"link": args[1], "title": " ".join(args[2:])}}, upsert=True)
-    await update.message.reply_text("✅ Force Sub Channel added successfully!")
+    await update.message.reply_text("✅ Force Sub Channel added/updated successfully!")
 
-# FIXED: Added missing del_channel function
 async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
@@ -488,11 +487,8 @@ async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ Usage: `/delchannel <channel_id_or_username>`", parse_mode="Markdown")
         return
     ch_id = int(args[0]) if args[0].replace("-", "").isdigit() else args[0]
-    res = channels_col.delete_one({"_id": ch_id})
-    if res.deleted_count > 0:
-        await update.message.reply_text("✅ Force Sub Channel removed successfully!")
-    else:
-        await update.message.reply_text("❌ Channel ID not found in database!")
+    channels_col.delete_one({"_id": ch_id})
+    await update.message.reply_text("✅ Force Sub Channel removed!")
 
 async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -531,6 +527,8 @@ def main():
     app.add_handler(CommandHandler("stats", stats_command))
     
     app.add_handler(CallbackQueryHandler(fsub_callback))
+    
+    # Catch ALL messages/files sent by admin when genlink or batch is active
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
     print("Bot is starting...")
