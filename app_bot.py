@@ -57,7 +57,6 @@ sessions_col = db["sessions"]
 
 broadcast_control = {"is_running": False}
 
-# Admin States
 admin_states = {}
 batch_sessions = {}
 
@@ -77,10 +76,11 @@ async def check_force_sub(bot, user_id):
             if member.status not in ["member", "administrator", "creator"]:
                 unjoined.append(ch)
         except Exception:
+            # अगर बोट को चैनल से निकाल दिया गया हो या कोई एरर आए
             pass
     return unjoined
 
-# ----------------- MAIN START HANDLER -----------------
+# ----------------- START HANDLER -----------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if not user:
@@ -89,14 +89,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
 
     async def safe_reply(text, **kwargs):
-        if update.message:
-            return await update.message.reply_text(text, **kwargs)
-        elif update.callback_query and update.callback_query.message:
-            return await update.callback_query.message.reply_text(text, **kwargs)
-        else:
-            return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
+        try:
+            if update.message:
+                return await update.message.reply_text(text, **kwargs)
+            elif update.callback_query and update.callback_query.message:
+                return await update.callback_query.message.reply_text(text, **kwargs)
+            else:
+                return await context.bot.send_message(chat_id=user_id, text=text, **kwargs)
+        except Exception as e:
+            print(f"Error in safe_reply: {e}")
 
-    # User registration in database
+    # User registration
     user_doc = users_col.find_one({"_id": user_id})
     if not user_doc:
         users_col.insert_one({"_id": user_id, "credits": 0})
@@ -112,7 +115,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             link = ch.get("link", f"https://t.me/{str(ch['_id']).replace('@', '')}")
             keyboard.append([InlineKeyboardButton(f"Join {ch.get('title', 'Channel')} 📢", url=link)])
         
-        start_param = args[0] if args else "None"
+        start_param = args[0] if (args and len(args) > 0) else "NO_PARAM"
         keyboard.append([InlineKeyboardButton("Joined! Check Now 🔄", callback_data=f"check_fsub_{start_param}")])
         
         await safe_reply(
@@ -123,7 +126,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 2. Ad Verification Handler
-    if args and args[0] == "VERIFY_AD":
+    if args and len(args) > 0 and args[0] == "VERIFY_AD":
         user_session = sessions_col.find_one({"_id": user_id})
         
         if not user_session:
@@ -150,7 +153,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # Update Session & Credits
         sessions_col.update_one({"_id": user_id}, {"$set": {"verified": True}})
         users_col.update_one({"_id": user_id}, {"$inc": {"credits": 3}}, upsert=True)
         updated_user = users_col.find_one({"_id": user_id})
@@ -167,7 +169,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 3. File / Batch Request
-    if args:
+    if args and len(args) > 0 and args[0] != "NO_PARAM":
         param = args[0]
         file_doc = files_col.find_one({"_id": param})
         batch_doc = batch_col.find_one({"_id": param})
@@ -198,13 +200,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="Markdown"
             )
             return
-        else:
-            await safe_reply("❌ Invalid or expired link!")
-            return
 
     # 4. Normal Start
     await safe_reply(
-        f"👋 Welcome!\n\n💰 Your Current Balance: **{current_credits} Credits**\nClick any file link to download content!",
+        f"👋 Welcome to Veronica Bot!\n\n💰 Your Current Balance: **{current_credits} Credits**\n\nClick any file link or share link to download content!",
         parse_mode="Markdown"
     )
 
@@ -271,13 +270,103 @@ async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.delete()
             except Exception:
                 pass
-            context.args = [param] if param != "None" else []
+            context.args = [param] if param not in ["NO_PARAM", "None"] else []
             await start(update, context)
 
-# ----------------- ADMIN COMMANDS -----------------
-async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+# ----------------- IMPROVED FORCE SUB MANAGEMENT -----------------
+async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ Usage: `/addchannel <channel_id_or_username>`\n\nExample:\n`/addchannel -100123456789` or `/addchannel @mychannel`", parse_mode="Markdown")
         return
+
+    raw_input = args[0].strip()
+    ch_id = int(raw_input) if raw_input.replace("-", "").isdigit() else raw_input
+
+    try:
+        # Check if bot is present in the channel
+        chat = await context.bot.get_chat(ch_id)
+        bot_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=context.bot.id)
+
+        if bot_member.status not in ["administrator", "member"]:
+            await update.message.reply_text(
+                f"❌ **Bot is not in the channel!**\n\nPlease add @{BOT_USERNAME} as an Administrator in **{chat.title}** first, then try again.",
+                parse_mode="Markdown"
+            )
+            return
+
+        # Fetch channel invite link
+        invite_link = chat.invite_link
+        if not invite_link and chat.username:
+            invite_link = f"https://t.me/{chat.username}"
+        elif not invite_link:
+            try:
+                invite_link = await context.bot.export_chat_invite_link(chat.id)
+            except Exception:
+                invite_link = f"https://t.me/{str(chat.id).replace('-100', '')}"
+
+        # Save to Mongo DB
+        channels_col.update_one(
+            {"_id": chat.id},
+            {"$set": {"link": invite_link, "title": chat.title, "username": chat.username}},
+            upsert=True
+        )
+
+        await update.message.reply_text(
+            f"✅ **Force Sub Channel Added Successfully!**\n\n📌 **Title:** {chat.title}\n🆔 **ID:** `{chat.id}`\n🔗 **Link:** {invite_link}\n\n🤖 *Bot is tracking this channel now.*",
+            parse_mode="Markdown"
+        )
+
+    except Exception as e:
+        await update.message.reply_text(
+            f"⚠️ **Error:** Could not access channel `{ch_id}`.\n\nMake sure the Channel ID/Username is correct and the bot is added to that channel as an **Admin**.\n\n`Details: {str(e)}`",
+            parse_mode="Markdown"
+        )
+
+async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ Usage: `/delchannel <channel_id_or_username>`", parse_mode="Markdown")
+        return
+
+    raw_input = args[0].strip()
+    
+    # Check by exact ID or search username
+    target_id = None
+    if raw_input.replace("-", "").isdigit():
+        target_id = int(raw_input)
+    else:
+        # Search by Username or ID string in DB
+        username_clean = raw_input.replace("@", "").lower()
+        found = channels_col.find_one({"$or": [{"username": username_clean}, {"_id": raw_input}]})
+        if found:
+            target_id = found["_id"]
+
+    if target_id is None:
+        target_id = raw_input
+
+    res = channels_col.delete_one({"_id": target_id})
+    if res.deleted_count > 0:
+        await update.message.reply_text("✅ Force Sub Channel removed successfully from database!")
+    else:
+        await update.message.reply_text("❌ Channel not found in Force Sub database!")
+
+async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    chs = list(channels_col.find())
+    if not chs:
+        await update.message.reply_text("📑 No Force Sub channels active.")
+        return
+    text = "📢 **Active Force Sub Channels:**\n\n"
+    for c in chs:
+        text += f"• `{c['_id']}` | [{c.get('title', 'Channel')}]({c.get('link')})\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+# ----------------- OTHER ADMIN COMMANDS -----------------
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
     text = (
         "🛠 **Admin Commands Guide:**\n\n"
         "🔗 `/genlink` - Generate link (Send / Reply file/media/text)\n"
@@ -285,8 +374,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📢 `/sendad` - Reply to message to broadcast\n"
         "🛑 `/stopbroadcast` - Stop ongoing broadcast\n"
         "🗑 `/deletebroadcast <id>` - Delete broadcast messages\n"
-        "➕ `/addchannel <id> <link> <title>` - Add Force Sub Channel\n"
-        "➖ `/delchannel <id>` - Remove Force Sub Channel\n"
+        "➕ `/addchannel <channel_id_or_username>` - Add Force Sub Channel\n"
+        "➖ `/delchannel <channel_id_or_username>` - Remove Force Sub Channel\n"
         "📑 `/channels` - List all Force Sub Channels\n"
         "🔘 `/togglead` - Enable/Disable Ads Mode\n"
         "📊 `/stats` - View total stats"
@@ -470,41 +559,6 @@ async def delete_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     broadcast_history_col.delete_one({"_id": b_id})
     await update.message.reply_text(f"🗑 Deleted {del_success} broadcast messages.")
 
-async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    args = context.args
-    if len(args) < 3:
-        await update.message.reply_text("⚠️ Usage: `/addchannel <channel_id_or_username> <link> <title>`", parse_mode="Markdown")
-        return
-    ch_id = int(args[0]) if args[0].replace("-", "").isdigit() else args[0]
-    channels_col.update_one({"_id": ch_id}, {"$set": {"link": args[1], "title": " ".join(args[2:])}}, upsert=True)
-    await update.message.reply_text("✅ Force Sub Channel added successfully!")
-
-# FIXED: Added missing del_channel function
-async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    args = context.args
-    if not args:
-        await update.message.reply_text("⚠️ Usage: `/delchannel <channel_id_or_username>`", parse_mode="Markdown")
-        return
-    ch_id = int(args[0]) if args[0].replace("-", "").isdigit() else args[0]
-    res = channels_col.delete_one({"_id": ch_id})
-    if res.deleted_count > 0:
-        await update.message.reply_text("✅ Force Sub Channel removed successfully!")
-    else:
-        await update.message.reply_text("❌ Channel ID not found in database!")
-
-async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    chs = list(channels_col.find())
-    if not chs:
-        await update.message.reply_text("📑 No Force Sub channels active.")
-        return
-    text = "📢 **Active Force Sub Channels:**\n\n"
-    for c in chs:
-        text += f"• `{c['_id']}` | [{c.get('title', 'Channel')}]({c.get('link')})\n"
-    await update.message.reply_text(text, parse_mode="Markdown")
-
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     total_users = users_col.count_documents({})
@@ -516,7 +570,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Handlers Registration
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", admin_panel))
     app.add_handler(CommandHandler("togglead", toggle_ad))
