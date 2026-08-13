@@ -56,7 +56,7 @@
             color: #94a3b8;
             font-size: 14px;
             line-height: 1.5;
-            margin: 0 0 20px 0;
+            margin: 0 0 16px 0;
         }
 
         p b {
@@ -99,6 +99,17 @@
             display: none;
         }
 
+        /* BidVertiser Top Ad Container (Button ke upar wala) */
+        .bidvertiser-top-container {
+            width: 100%;
+            margin-bottom: 16px; /* Button se safe distance taaki misclick na ho */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            min-height: 50px;
+        }
+
         .bidvertiser-verify-container {
             margin-top: 15px;
             opacity: 0.8;
@@ -131,8 +142,18 @@
         <span class="icon">🔒</span>
         <h2>Unlock Your Content</h2>
         <p>Watch a short ad completely to get <b>+3 Credits</b> and auto-download your file.</p>
+        
+        <!-- NEW BIDVERTISER AD (BUTTON KE UPAR) -->
+        <div class="bidvertiser-top-container">
+            <!-- Begin BidVertiser code -->
+            <SCRIPT data-cfasync="false" SRC="//bdv.bidvertiser.com/BidVertiser.dbm?pid=922602&bid=2106619" TYPE="text/javascript"></SCRIPT>
+            <!-- End BidVertiser code -->
+        </div>
+
+        <!-- WATCH AD BUTTON -->
         <button class="btn btn-blue" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
 
+        <!-- OLD BIDVERTISER VERIFICATION UNIT -->
         <div class="bidvertiser-verify-container">
             <script type="text/javascript">
                 BDV_Zone = 2106593;
