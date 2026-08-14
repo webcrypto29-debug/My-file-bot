@@ -99,20 +99,6 @@
             display: none;
         }
 
-        /* BidVertiser Fixed Container */
-        .bidvertiser-top-container {
-            width: 100%;
-            margin-bottom: 16px;
-            display: block;
-            min-height: 60px;
-            text-align: center;
-        }
-
-        .bidvertiser-verify-container {
-            margin-top: 15px;
-            min-height: 50px;
-        }
-
         .step2-top-ad {
             width: 100%;
             margin-bottom: 15px;
@@ -121,7 +107,7 @@
         /* Fixed A-ADS Container */
         .aads-wrapper {
             width: 100%;
-            min-height: 90px;
+            min-height: 90px; /* Fully visible height to prevent "Hidden" flags */
             margin: 10px 0 15px 0;
             display: flex;
             justify-content: center;
@@ -139,28 +125,15 @@
         <span class="icon">🔒</span>
         <h2>Unlock Your Content</h2>
         <p>Watch a short ad completely to get <b>+3 Credits</b> and auto-download your file.</p>
-        
-        <!-- BIDVERTISER AD (TOP) -->
-        <div class="bidvertiser-top-container">
-            <script data-cfasync="false" src="https://bdv.bidvertiser.com/BidVertiser.dbm?pid=922602&bid=2106619" type="text/javascript"></script>
-        </div>
 
         <!-- WATCH AD BUTTON -->
         <button class="btn btn-blue" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
-
-        <!-- BIDVERTISER VERIFICATION UNIT -->
-        <div class="bidvertiser-verify-container">
-            <script type="text/javascript">
-                BDV_Zone = 2106593;
-            </script>
-            <script type="text/javascript" src="https://bdv.bidvertiser.com/BidVertiser.dbm?pid=2106593&bid=2106593"></script>
-        </div>
     </div>
 
     <!-- SCREEN 2 -->
     <div class="card" id="step2">
         
-        <!-- A-ADS Container: Iframe will load dynamically on Step 2 active -->
+        <!-- A-ADS Container: Dynamically loaded via JS -->
         <div class="aads-wrapper" id="aads-holder"></div>
 
         <div class="step2-top-ad">
@@ -196,9 +169,16 @@
             trackRichAdsImpression();
         });
 
+        // Dynamic Iframe creation after container is visible
         function loadAadsIframe() {
             const container = document.getElementById("aads-holder");
-            container.innerHTML = `<iframe data-aa='2451775' src='https://acceptable.a-ads.com/2451775/?size=Adaptive' style='border:0; padding:0; width:100%; height:90px; overflow:hidden; display:block;'></iframe>`;
+            if (!container.querySelector('iframe')) {
+                const iframe = document.createElement('iframe');
+                iframe.setAttribute('data-aa', '2451775');
+                iframe.src = 'https://acceptable.a-ads.com/2451775/?size=Adaptive';
+                iframe.style.cssText = 'border:0; padding:0; width:100%; height:90px; overflow:hidden; display:block;';
+                container.appendChild(iframe);
+            }
         }
 
         function watchAd() {
@@ -206,13 +186,12 @@
                 show_11452552().then(() => {
                     document.getElementById("step1").style.display = "none";
                     document.getElementById("step2").style.display = "block";
-                    // Step 2 visible hone par A-Ads ko load karein taaki Hidden error na aaye
-                    loadAadsIframe();
+                    loadAadsIframe(); // Load A-Ads on Step 2 active
                 }).catch((err) => {
                     alert("Ad skipped or failed to complete. Please watch the full ad!");
                 });
             } else {
-                // Fallback for testing/if Monetag fails
+                // Fallback for testing/if Monetag script loading is delayed
                 document.getElementById("step1").style.display = "none";
                 document.getElementById("step2").style.display = "block";
                 loadAadsIframe();
