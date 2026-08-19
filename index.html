@@ -1,86 +1,144 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <meta name="coinzilla" content="4d31ea62b00b765c634e12d6d4e7e0cc" />
-    
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0,
+                   maximum-scale=1.0, user-scalable=no">
+
     <title>Veronica Bot - Unlock Content</title>
 
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <!-- Monetag Rewarded SDK -->
-    <script src="https://libtl.com/sdk.js" data-zone="11452552" data-sdk="show_11452552"></script>
+    <script
+        src="https://libtl.com/sdk.js"
+        data-zone="11452552"
+        data-sdk="show_11452552">
+    </script>
 
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
             background-color: #0b1120;
             color: #ffffff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family:
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                Roboto,
+                Helvetica,
+                Arial,
+                sans-serif;
+
             display: flex;
             align-items: center;
             justify-content: center;
+
             min-height: 100vh;
+
             margin: 0;
             padding: 16px;
-            box-sizing: border-box;
+
             text-align: center;
         }
 
         .card {
             background-color: #172033;
-            padding: 24px 18px;
+
+            padding: 26px 18px;
+
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-            max-width: 360px;
+
+            box-shadow:
+                0 10px 30px rgba(0, 0, 0, 0.40);
+
+            max-width: 380px;
             width: 100%;
-            border: 1px solid rgba(255, 255, 255, 0.05);
+
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .icon {
-            font-size: 44px;
+            font-size: 46px;
+
             margin-bottom: 10px;
+
             display: block;
         }
 
         h2 {
             margin: 0 0 10px 0;
+
             font-size: 22px;
+
             font-weight: 700;
+
             color: #ffffff;
         }
 
         p {
             color: #94a3b8;
+
             font-size: 14px;
-            line-height: 1.5;
-            margin: 0 0 16px 0;
+
+            line-height: 1.55;
+
+            margin: 0 0 18px 0;
         }
 
         p b {
-            color: #cbd5e1;
+            color: #e2e8f0;
         }
 
         .btn {
-            color: white;
+            color: #ffffff;
+
             border: none;
+
             padding: 14px 20px;
+
             font-size: 16px;
-            font-weight: 600;
+
+            font-weight: 650;
+
             border-radius: 12px;
+
             cursor: pointer;
+
             width: 100%;
+
             display: flex;
+
             align-items: center;
+
             justify-content: center;
+
             gap: 8px;
-            transition: transform 0.1s ease, opacity 0.2s;
+
+            transition:
+                transform 0.1s ease,
+                opacity 0.2s ease;
+
+            -webkit-tap-highlight-color: transparent;
         }
 
         .btn:active {
             transform: scale(0.98);
+        }
+
+        .btn:disabled {
+            opacity: 0.65;
+
+            cursor: not-allowed;
+
+            transform: none;
         }
 
         .btn-blue {
@@ -91,124 +149,407 @@
             background-color: #16a34a;
         }
 
+        .status {
+            display: none;
+
+            margin-top: 14px;
+
+            padding: 10px 12px;
+
+            border-radius: 10px;
+
+            font-size: 13px;
+
+            line-height: 1.4;
+        }
+
+        .status.error {
+            background: rgba(239, 68, 68, 0.12);
+
+            color: #fca5a5;
+        }
+
+        .status.loading {
+            background: rgba(59, 130, 246, 0.12);
+
+            color: #93c5fd;
+        }
+
+        .small-note {
+            margin-top: 14px;
+
+            margin-bottom: 0;
+
+            font-size: 12px;
+
+            color: #64748b;
+        }
+
         #step2 {
             display: none;
         }
 
-        #richads-container {
-            display: none;
+        .success-box {
+            background: rgba(22, 163, 74, 0.10);
+
+            border: 1px solid rgba(22, 163, 74, 0.20);
+
+            border-radius: 12px;
+
+            padding: 12px;
+
+            margin-bottom: 18px;
         }
 
-        .step2-top-ad {
-            width: 100%;
-            margin-bottom: 15px;
+        .success-box strong {
+            display: block;
+
+            color: #86efac;
+
+            font-size: 15px;
+
+            margin-bottom: 4px;
         }
 
-        /* Fixed A-ADS Container */
-        .aads-wrapper {
-            width: 100%;
-            min-height: 90px; /* Fully visible height to prevent "Hidden" flags */
-            margin: 10px 0 15px 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
+        .success-box span {
+            color: #94a3b8;
+
+            font-size: 13px;
         }
     </style>
 </head>
+
 <body>
 
-    <!-- RICHADS TRACKING CONTAINER -->
-    <div id="richads-container"></div>
+    <!-- =========================
+         STEP 1
+         ========================= -->
 
-    <!-- SCREEN 1 -->
     <div class="card" id="step1">
+
         <span class="icon">🔒</span>
-        <h2>Unlock Your Content</h2>
-        <p>Watch a short ad completely to get <b>+3 Credits</b> and auto-download your file.</p>
 
-        <!-- WATCH AD BUTTON -->
-        <button class="btn btn-blue" onclick="watchAd()">Watch Ad to Unlock 🚀</button>
-    </div>
+        <h2>Unlock Your File</h2>
 
-    <!-- SCREEN 2 -->
-    <div class="card" id="step2">
-        
-        <!-- A-ADS Container: Dynamically loaded via JS -->
-        <div class="aads-wrapper" id="aads-holder"></div>
+        <p>
+            Watch the short ad completely to unlock your file.
+            <br><br>
+            <b>No subscription or payment required.</b>
+        </p>
 
-        <div class="step2-top-ad">
-            <div data-banner-id="6124139"></div>
+        <button
+            class="btn btn-blue"
+            id="watchAdBtn"
+            onclick="watchAd()">
+
+            🎬 Watch Ad to Unlock
+        </button>
+
+        <div
+            class="status loading"
+            id="loadingStatus">
+
+            ⏳ Loading advertisement...
         </div>
 
-        <span class="icon">🎁</span>
-        <h2>Unlock Your File</h2>
-        <p>Watch a short rewarded ad to automatically unlock your file in Telegram.</p>
+        <div
+            class="status error"
+            id="errorStatus">
 
-        <button class="btn btn-green" onclick="getFiles()">Get Files 🚀</button>
+        </div>
+
+        <p class="small-note">
+            Please watch the ad completely to continue.
+        </p>
+
     </div>
 
+
+    <!-- =========================
+         STEP 2
+         ========================= -->
+
+    <div class="card" id="step2">
+
+        <span class="icon">🎉</span>
+
+        <h2>File Unlocked!</h2>
+
+        <div class="success-box">
+
+            <strong>✅ Ad Completed Successfully</strong>
+
+            <span>
+                Your file is ready in Telegram.
+            </span>
+
+        </div>
+
+        <p>
+            Tap the button below to get your file.
+        </p>
+
+        <button
+            class="btn btn-green"
+            onclick="getFiles()">
+
+            📥 Get Files
+        </button>
+
+    </div>
+
+
     <script>
-        const tg = window.Telegram.WebApp;
-        if(tg) tg.expand();
 
-        const RICHADS_PUB_ID = "885469";
-        const RICHADS_NOTIFICATION_URL = `https://vignette.richads.com/impression?pub_id=${RICHADS_PUB_ID}&event=impression`;
+        /* ==========================================
+           TELEGRAM WEB APP
+           ========================================== */
 
-        function trackRichAdsImpression() {
-            fetch(RICHADS_NOTIFICATION_URL, { method: "GET", mode: "no-cors" })
-                .then(() => console.log("RichAds impression logged successfully!"))
-                .catch((err) => console.error("RichAds tracking error:", err));
+        const tg = window.Telegram
+            ? window.Telegram.WebApp
+            : null;
 
-            const adScript = document.createElement("script");
-            adScript.src = `https://vignette.richads.com/ad.js?pub_id=${RICHADS_PUB_ID}`;
-            adScript.async = true;
-            document.getElementById("richads-container").appendChild(adScript);
-        }
-
-        window.addEventListener("DOMContentLoaded", () => {
-            trackRichAdsImpression();
-        });
-
-        // Dynamic Iframe creation after container is visible
-        function loadAadsIframe() {
-            const container = document.getElementById("aads-holder");
-            if (!container.querySelector('iframe')) {
-                const iframe = document.createElement('iframe');
-                iframe.setAttribute('data-aa', '2451775');
-                iframe.src = 'https://acceptable.a-ads.com/2451775/?size=Adaptive';
-                iframe.style.cssText = 'border:0; padding:0; width:100%; height:90px; overflow:hidden; display:block;';
-                container.appendChild(iframe);
+        if (tg) {
+            try {
+                tg.ready();
+                tg.expand();
+            } catch (error) {
+                console.log("Telegram WebApp initialization error:", error);
             }
         }
 
-        function watchAd() {
-            if (typeof show_11452552 === 'function') {
-                show_11452552().then(() => {
-                    document.getElementById("step1").style.display = "none";
-                    document.getElementById("step2").style.display = "block";
-                    loadAadsIframe(); // Load A-Ads on Step 2 active
-                }).catch((err) => {
-                    alert("Ad skipped or failed to complete. Please watch the full ad!");
-                });
-            } else {
-                // Fallback for testing/if Monetag script loading is delayed
-                document.getElementById("step1").style.display = "none";
-                document.getElementById("step2").style.display = "block";
-                loadAadsIframe();
+
+        /* ==========================================
+           ELEMENTS
+           ========================================== */
+
+        const step1 =
+            document.getElementById("step1");
+
+        const step2 =
+            document.getElementById("step2");
+
+        const watchAdBtn =
+            document.getElementById("watchAdBtn");
+
+        const loadingStatus =
+            document.getElementById("loadingStatus");
+
+        const errorStatus =
+            document.getElementById("errorStatus");
+
+
+        /* ==========================================
+           UI HELPERS
+           ========================================== */
+
+        function showLoading(message) {
+
+            loadingStatus.textContent = message;
+
+            loadingStatus.style.display = "block";
+
+            errorStatus.style.display = "none";
+
+            watchAdBtn.disabled = true;
+        }
+
+
+        function hideLoading() {
+
+            loadingStatus.style.display = "none";
+
+            watchAdBtn.disabled = false;
+        }
+
+
+        function showError(message) {
+
+            loadingStatus.style.display = "none";
+
+            errorStatus.textContent = message;
+
+            errorStatus.style.display = "block";
+
+            watchAdBtn.disabled = false;
+        }
+
+
+        function showStep2() {
+
+            step1.style.display = "none";
+
+            step2.style.display = "block";
+
+            window.scrollTo({
+                top: 0,
+                behavior: "smooth"
+            });
+        }
+
+
+        /* ==========================================
+           MONETAG REWARDED AD
+           ========================================== */
+
+        async function watchAd() {
+
+            errorStatus.style.display = "none";
+
+            /*
+             * IMPORTANT:
+             * No fallback unlock is used here.
+             *
+             * If Monetag is unavailable,
+             * the file will NOT unlock.
+             */
+
+            if (
+                typeof window.show_11452552 !== "function"
+            ) {
+
+                showError(
+                    "Advertisement is not ready yet. Please try again in a few seconds."
+                );
+
+                return;
+            }
+
+
+            try {
+
+                showLoading(
+                    "⏳ Please wait, advertisement is loading..."
+                );
+
+
+                /*
+                 * Monetag rewarded advertisement
+                 *
+                 * The promise resolves after the
+                 * rewarded ad has successfully completed.
+                 */
+
+                await window.show_11452552();
+
+
+                /*
+                 * Rewarded ad completed successfully.
+                 *
+                 * Now and ONLY now move to Step 2.
+                 */
+
+                hideLoading();
+
+                showStep2();
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Monetag rewarded ad error:",
+                    error
+                );
+
+                showError(
+                    "⚠️ The ad was not completed. Please watch the full ad and try again."
+                );
             }
         }
+
+
+        /* ==========================================
+           GET FILE
+           ========================================== */
 
         function getFiles() {
-            const botUrl = "https://t.me/MyFile727_bot?start=VERIFY_AD";
-            
-            if (tg && tg.openTelegramLink) {
-                tg.openTelegramLink(botUrl);
-                tg.close();
-            } else {
-                window.location.href = botUrl;
+
+            const botUrl =
+                "https://t.me/MyFile727_bot?start=VERIFY_AD";
+
+
+            /*
+             * Telegram WebApp
+             */
+
+            if (
+                tg &&
+                typeof tg.openTelegramLink === "function"
+            ) {
+
+                try {
+
+                    tg.openTelegramLink(botUrl);
+
+                    /*
+                     * Close Mini App after opening
+                     * Telegram bot.
+                     */
+
+                    setTimeout(() => {
+
+                        try {
+                            tg.close();
+                        } catch (error) {
+                            console.log(
+                                "Telegram close error:",
+                                error
+                            );
+                        }
+
+                    }, 300);
+
+                    return;
+
+                }
+
+                catch (error) {
+
+                    console.error(
+                        "Telegram link error:",
+                        error
+                    );
+                }
             }
+
+
+            /*
+             * Normal browser fallback
+             */
+
+            window.location.href = botUrl;
         }
+
+
+        /* ==========================================
+           PAGE LOAD
+           ========================================== */
+
+        window.addEventListener(
+            "DOMContentLoaded",
+            () => {
+
+                console.log(
+                    "Veronica Bot unlock page loaded."
+                );
+
+                /*
+                 * We intentionally DO NOT:
+                 *
+                 * - load RichAds
+                 * - load A-ADS
+                 * - load Coinzilla
+                 * - manually create impression URLs
+                 * - unlock without Monetag
+                 *
+                 * Monetag is the only ad used here.
+                 */
+            }
+        );
+
     </script>
 
 </body>
 </html>
+```
