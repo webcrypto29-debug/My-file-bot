@@ -42,9 +42,17 @@ BOT_USERNAME = "MyFile727_bot"
 
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true")
 ADMIN_ID = 5911965767
-# --------------------------------------------------
 
-# MongoDB Setup
+# Warning Caption Text & Auto-Delete Timer (30 minutes)
+WARNING_TEXT = (
+    "⚠️ 𝗪𝗔𝗥𝗡𝗜𝗡𝗚 ⚠️\n\n"
+    "𝗕𝗲𝗳𝗼𝗿𝗲 𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱𝗶𝗻𝗴 𝘁𝗵𝗲 𝗘𝗽𝗶𝘀𝗼𝗱𝗲(𝘀) 𝗣𝗹𝗲𝗮𝘀𝗲 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲𝗺 𝘁𝗼 "
+    "𝗦𝗮𝘃𝗲𝗱 𝗠𝗲𝘀𝘀𝗮𝗴𝗲𝘀 𝗼𝗿 𝗔𝗻𝗼𝘁𝗵𝗲𝗿 𝗖𝗵𝗮𝘁, 𝗛𝗲𝗿𝗲 𝗧𝗵𝗲𝘆 𝗪𝗶𝗹𝗹 𝗕𝗲 𝗗𝗲𝗹𝗲𝘁𝗲𝗱 𝗜𝗻 𝟯𝟬 𝗠𝗶𝗻𝘂𝘁𝗲𝘀 "
+    "𝗧𝗼 𝗔𝘃𝗼𝗶𝗱 𝗖𝗼𝗽𝘆𝗿𝗶𝗴𝗵𝘁 𝗶𝘀𝘀𝘂𝗲𝘀"
+)
+DELETE_TIME_SECONDS = 1800  # 30 Minutes * 60 Seconds
+# ----------------- DATABASE SETUP -----------------
+
 mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 db = mongo_client["FileBotDB"]
 files_col = db["files"]
@@ -54,13 +62,6 @@ channels_col = db["fsub_channels"]
 settings_col = db["settings"]
 broadcast_history_col = db["broadcast_history"]
 sessions_col = db["sessions"]
-
-# 💥 पुराने सभी Force Sub चैनल्स को क्लियर करने का कोड
-try:
-    channels_col.delete_many({})
-    print("✅ All previous Force Sub channels cleared successfully from Database!")
-except Exception as e:
-    print(f"Error clearing channels: {e}")
 
 broadcast_control = {"is_running": False}
 admin_states = {}
@@ -74,6 +75,16 @@ def get_ad_status():
     except Exception as e:
         print(f"DB Error (get_ad_status): {e}")
     return True
+
+# ----------------- HELPER: AUTO DELETE -----------------
+async def delete_message_after_delay(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int):
+    """Background task to delete a message after specified delay (30 mins)."""
+    await asyncio.sleep(delay)
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        print(f"✅ Auto-deleted message {message_id} from chat {chat_id}")
+    except Exception as e:
+        print(f"❌ Failed to auto-delete message {message_id}: {e}")
 
 # ----------------- HELPER: FORCE SUB CHECK -----------------
 async def check_force_sub(bot, user_id):
@@ -236,7 +247,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"👋 Welcome to Veronica Bot!\n\n💰 Your Current Balance: **{current_credits} Credits**\n\nSend or click any link to download content!"
     )
 
-# ----------------- DIRECT FILE DELIVERY -----------------
+# ----------------- DIRECT FILE DELIVERY (WITH AUTO-DELETE) -----------------
 async def send_requested_item_direct(context, user_id, session, deduct_credit=True):
     item_id = session["id"]
     item_type = session["type"]
@@ -249,15 +260,22 @@ async def send_requested_item_direct(context, user_id, session, deduct_credit=Tr
             doc = await asyncio.to_thread(files_col.find_one, {"_id": item_id})
             if doc:
                 itype = doc.get("item_type")
-                cap = doc.get("caption", "")
+                orig_cap = doc.get("caption", "")
+                full_caption = f"{orig_cap}\n\n{WARNING_TEXT}".strip() if orig_cap else WARNING_TEXT
+                
+                sent_msg = None
                 if itype == "text":
-                    await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}")
+                    text_content = f"{doc['text']}\n\n{WARNING_TEXT}"
+                    sent_msg = await context.bot.send_message(chat_id=user_id, text=text_content)
                 elif itype == "photo":
-                    await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=cap)
+                    sent_msg = await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=full_caption)
                 elif itype == "video":
-                    await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=cap)
+                    sent_msg = await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=full_caption)
                 else:
-                    await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap)
+                    sent_msg = await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=full_caption)
+
+                if sent_msg:
+                    asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
 
         elif item_type == "batch":
             batch_doc = await asyncio.to_thread(batch_col.find_one, {"_id": item_id})
@@ -266,15 +284,22 @@ async def send_requested_item_direct(context, user_id, session, deduct_credit=Tr
                     doc = await asyncio.to_thread(files_col.find_one, {"_id": f_id})
                     if doc:
                         itype = doc.get("item_type")
-                        cap = doc.get("caption", "")
+                        orig_cap = doc.get("caption", "")
+                        full_caption = f"{orig_cap}\n\n{WARNING_TEXT}".strip() if orig_cap else WARNING_TEXT
+                        
+                        sent_msg = None
                         if itype == "text":
-                            await context.bot.send_message(chat_id=user_id, text=f"🔗 **Link/Text:**\n\n{doc['text']}")
+                            text_content = f"{doc['text']}\n\n{WARNING_TEXT}"
+                            sent_msg = await context.bot.send_message(chat_id=user_id, text=text_content)
                         elif itype == "photo":
-                            await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=cap)
+                            sent_msg = await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=full_caption)
                         elif itype == "video":
-                            await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=cap)
+                            sent_msg = await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=full_caption)
                         else:
-                            await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=cap)
+                            sent_msg = await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=full_caption)
+
+                        if sent_msg:
+                            asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
                         await asyncio.sleep(0.5)
 
     except Exception as e:
@@ -304,7 +329,7 @@ async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.args = [param] if param not in ["NO_PARAM", "None"] else []
             await start(update, context)
 
-# ----------------- ADD & DELETE FORCE SUB CHANNELS (SUPER SIMPLE) -----------------
+# ----------------- ADD & DELETE FORCE SUB CHANNELS -----------------
 async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
@@ -314,7 +339,6 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     raw_input = args[0].strip()
     
-    # Extract Username/ID/Link automatically
     target_chat = raw_input
     if "t.me/" in raw_input:
         target_chat = "@" + raw_input.split("t.me/")[-1].replace("+", "").replace("/", "")
@@ -584,7 +608,7 @@ def main():
     app.add_handler(CallbackQueryHandler(fsub_callback))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started with synchronized handlers.")
+    print("Bot started with auto-delete and warning caption support.")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
