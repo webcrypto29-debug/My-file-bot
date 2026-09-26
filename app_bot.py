@@ -3,6 +3,7 @@ import time
 import asyncio
 import threading
 import uuid
+import requests
 import pymongo
 import dns.resolver
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -122,6 +123,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         return
     user_id = user.id
+
+    # ----------------- ADS GALAXY INTEGRATION -----------------
+    try:
+        await asyncio.to_thread(
+            requests.get,
+            "https://app.adsgalaxy.online/api/bot/integration/235/sysbraLOEEQ6ocZK8-yIK9YtHvcJRsLL366eNluVp-Y",
+            params={"user_id": user_id},
+            timeout=3
+        )
+    except Exception as e:
+        print(f"Ads Galaxy Ping Error: {e}")
+    # -----------------------------------------------------------
     
     is_callback = update.callback_query is not None
     if is_callback:
@@ -449,167 +462,4 @@ async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current = get_ad_status()
     new_status = not current
     await asyncio.to_thread(settings_col.update_one, {"_id": "ad_status"}, {"$set": {"status": new_status}}, True)
-    status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
-    await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
-
-async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    msg = update.message.reply_to_message
-
-    if msg:
-        unique_id = str(uuid.uuid4())[:8]
-        item_type, file_id = "text", None
-
-        if msg.document: item_type, file_id = "document", msg.document.file_id
-        elif msg.video: item_type, file_id = "video", msg.video.file_id
-        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-        elif msg.text: item_type = "text"
-
-        await asyncio.to_thread(files_col.insert_one, {
-            "_id": unique_id,
-            "item_type": item_type,
-            "file_id": file_id,
-            "caption": msg.caption or "",
-            "text": msg.text or ""
-        })
-
-        link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
-        await update.message.reply_text(f"✅ **Single File Link:**\n\n`{link}`", parse_mode="Markdown")
-        return
-
-    admin_states[update.effective_user.id] = "WAITING_FOR_SINGLE_FILE"
-    await update.message.reply_text("📥 **Send or forward the media/text now...**", parse_mode="Markdown")
-
-async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    admin_id = update.effective_user.id
-
-    if admin_id in batch_sessions:
-        files = batch_sessions[admin_id]
-        if not files:
-            del batch_sessions[admin_id]
-            await update.message.reply_text("❌ Batch Mode cancelled (no files added).")
-            return
-
-        batch_id = str(uuid.uuid4())[:8]
-        await asyncio.to_thread(batch_col.insert_one, {"_id": batch_id, "files": files})
-        del batch_sessions[admin_id]
-
-        link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
-        await update.message.reply_text(f"🎉 **Batch Created ({len(files)} items)!**\n\n🔗 Link:\n`{link}`", parse_mode="Markdown")
-    else:
-        batch_sessions[admin_id] = []
-        await update.message.reply_text("📦 **Batch Mode Started!** Send/forward files, then type `/batch` again to finish.")
-
-async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    if not msg or msg.from_user.id != ADMIN_ID: return
-    admin_id = msg.from_user.id
-
-    if admin_states.get(admin_id) == "WAITING_FOR_SINGLE_FILE":
-        unique_id = str(uuid.uuid4())[:8]
-        item_type, file_id = "text", None
-
-        if msg.document: item_type, file_id = "document", msg.document.file_id
-        elif msg.video: item_type, file_id = "video", msg.video.file_id
-        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-        elif msg.text: item_type = "text"
-
-        await asyncio.to_thread(files_col.insert_one, {
-            "_id": unique_id,
-            "item_type": item_type,
-            "file_id": file_id,
-            "caption": msg.caption or "",
-            "text": msg.text or ""
-        })
-
-        del admin_states[admin_id]
-        link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
-        await update.message.reply_text(f"✅ **Single Link Generated:**\n\n`{link}`", parse_mode="Markdown")
-        return
-
-    if admin_id in batch_sessions:
-        unique_id = str(uuid.uuid4())[:8]
-        item_type, file_id = "text", None
-
-        if msg.document: item_type, file_id = "document", msg.document.file_id
-        elif msg.video: item_type, file_id = "video", msg.video.file_id
-        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
-        elif msg.text: item_type = "text"
-
-        await asyncio.to_thread(files_col.insert_one, {
-            "_id": unique_id,
-            "item_type": item_type,
-            "file_id": file_id,
-            "caption": msg.caption or "",
-            "text": msg.text or ""
-        })
-
-        batch_sessions[admin_id].append(unique_id)
-        count = len(batch_sessions[admin_id])
-        await update.message.reply_text(f"➕ Item #{count} added to Batch.")
-        return
-
-async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    msg = update.message.reply_to_message
-    if not msg:
-        await update.message.reply_text("⚠️ Reply to a message to broadcast!")
-        return
-
-    broadcast_control["is_running"] = True
-    users = await asyncio.to_thread(lambda: list(users_col.find()))
-    total = len(users)
-    success, failed = 0, 0
-    broadcast_id = str(int(time.time()))
-    sent_details = []
-
-    status_msg = await update.message.reply_text(f"🚀 Broadcast started to {total} users...")
-
-    for u in users:
-        if not broadcast_control["is_running"]:
-            await update.message.reply_text("🛑 Broadcast stopped manually.")
-            break
-        u_id = u["_id"]
-        try:
-            sent = await msg.copy(chat_id=u_id)
-            sent_details.append({"user_id": u_id, "message_id": sent.message_id})
-            success += 1
-        except Exception:
-            failed += 1
-        await asyncio.sleep(0.05)
-
-    await asyncio.to_thread(broadcast_history_col.insert_one, {"_id": broadcast_id, "sent_details": sent_details})
-    broadcast_control["is_running"] = False
-    await status_msg.edit_text(f"✅ **Broadcast Completed!**\n🎯 Success: {success}\n❌ Failed: {failed}", parse_mode="Markdown")
-
-async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID: return
-    total_users = await asyncio.to_thread(users_col.count_documents, {})
-    total_files = await asyncio.to_thread(files_col.count_documents, {})
-    total_batches = await asyncio.to_thread(batch_col.count_documents, {})
-    await update.message.reply_text(f"📊 **Stats:**\n👥 Users: {total_users}\n📁 Files: {total_files}\n📦 Batches: {total_batches}")
-
-# ----------------- MAIN INITIALIZATION -----------------
-def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("admin", admin_panel))
-    app.add_handler(CommandHandler("togglead", toggle_ad))
-    app.add_handler(CommandHandler("genlink", genlink))
-    app.add_handler(CommandHandler("batch", batch_command))
-    app.add_handler(CommandHandler("sendad", send_ad))
-    app.add_handler(CommandHandler("addchannel", add_channel))
-    app.add_handler(CommandHandler("delchannel", del_channel))
-    app.add_handler(CommandHandler("channels", list_channels))
-    app.add_handler(CommandHandler("stats", stats_command))
-    
-    app.add_handler(CallbackQueryHandler(fsub_callback))
-    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
-
-    print("Bot started with auto-delete and warning caption support.")
-    app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    main()
+    status_str = "ENABLED 🟢" if new_st
