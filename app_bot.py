@@ -204,12 +204,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await send_requested_item_direct(context, user_id, session_info)
                 return
 
-            keyboard = [[InlineKeyboardButton("Watch Ad Now 🚀", web_app=WebAppInfo(url=MINI_APP_URL))]]
-            await send_response("🔒 **File Locked!**\n\n👇 Click below to watch a quick ad and unlock your file:", reply_markup=InlineKeyboardMarkup(keyboard))
+            keyboard = [[InlineKeyboardButton("🎬 Watch Ad Now to Unlock", web_app=WebAppInfo(url=MINI_APP_URL))]]
+            await send_response(
+                "🔒 **File Locked!**\n\n"
+                "👉 **Click below** to watch a quick ad and unlock your file instantly:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
             return
 
-    # Clean Welcome Message (No unnecessary earning buttons at the start)
-    await send_response("👋 **Welcome to Veronica Bot!**\n\nSend your file link or open a valid file link to download content safely.")
+    # Clean, Catchy Welcome Message for direct bot open (No clutter)
+    await send_response(
+        "👋 **Welcome to Veronica Bot!**\n\n"
+        "✨ Send or open a valid file link to download your favorite movies and content safely.",
+        parse_mode="Markdown"
+    )
 
 async def send_requested_item_direct(context, user_id, session):
     item_id = session["id"]
@@ -262,10 +270,10 @@ async def send_requested_item_direct(context, user_id, session):
 
         # --- EXACTLY HERE: Right after the file is successfully delivered ---
         current_earn_link = get_current_earn_link()
-        earn_keyboard = [[InlineKeyboardButton("🔥 Complete Tasks & Earn Extra Money", url=current_earn_link)]]
+        earn_keyboard = [[InlineKeyboardButton("🔥 Earn Extra Money / Passive Income", url=current_earn_link)]]
         await context.bot.send_message(
             chat_id=user_id,
-            text="✨ **Want to earn extra money online?**\n\nClick below to participate in tasks and referral programs:",
+            text="💰 **Want to earn passive income online?**\n\nClick the button below to join tasks and start earning:",
             reply_markup=InlineKeyboardMarkup(earn_keyboard)
         )
 
@@ -584,7 +592,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback_handler))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started with correct post-file earning link position.")
+    print("Bot started successfully with correct message flow.")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
