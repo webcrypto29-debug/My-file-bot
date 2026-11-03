@@ -27,19 +27,19 @@
         }
         .card {
             background-color: #172033;
-            padding: 26px 18px;
+            padding: 24px 16px;
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.40);
             max-width: 380px;
             width: 100%;
             border: 1px solid rgba(255, 255, 255, 0.06);
         }
-        .icon { font-size: 46px; margin-bottom: 10px; display: block; }
-        h2 { margin: 0 0 10px 0; font-size: 22px; font-weight: 700; color: #ffffff; }
-        p { color: #94a3b8; font-size: 14px; line-height: 1.55; margin: 0 0 18px 0; }
+        .icon { font-size: 42px; margin-bottom: 8px; display: block; }
+        h2 { margin: 0 0 8px 0; font-size: 20px; font-weight: 700; color: #ffffff; }
+        p { color: #94a3b8; font-size: 13px; line-height: 1.5; margin: 0 0 14px 0; }
         p b { color: #e2e8f0; }
         .btn {
-            color: #ffffff; border: none; padding: 14px 20px; font-size: 16px; font-weight: 650;
+            color: #ffffff; border: none; padding: 13px 18px; font-size: 15px; font-weight: 650;
             border-radius: 12px; cursor: pointer; width: 100%; display: flex; align-items: center;
             justify-content: center; gap: 8px; transition: transform 0.1s ease, opacity 0.2s ease;
             -webkit-tap-highlight-color: transparent;
@@ -48,64 +48,67 @@
         .btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
         .btn-blue { background-color: #2563eb; }
         .btn-green { background-color: #16a34a; margin-top: 10px; }
-        
-        /* Admin Bypass Button Style */
-        .btn-admin {
-            background-color: #7c3aed;
-            margin-top: 10px;
-            display: none; /* Hidden by default for normal users */
-        }
+        .btn-admin { background-color: #7c3aed; margin-top: 10px; display: none; }
 
-        .status { display: none; margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.4; }
+        .status { display: none; margin-top: 12px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
         .status.error { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
         .status.loading { background: rgba(59, 130, 246, 0.12); color: #93c5fd; }
-        .small-note { margin-top: 14px; margin-bottom: 0; font-size: 12px; color: #64748b; }
+        .small-note { margin-top: 12px; margin-bottom: 0; font-size: 11px; color: #64748b; }
         
+        /* Ad Banner Container */
         .ad-container {
-            margin: 15px 0;
-            padding: 8px;
+            margin: 12px 0;
+            padding: 6px;
             background: rgba(255, 255, 255, 0.03);
             border: 1px dashed rgba(255, 255, 255, 0.15);
             border-radius: 10px;
         }
         .ad-label {
-            font-size: 10px;
+            font-size: 9px;
             color: #64748b;
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 6px;
+            margin-bottom: 4px;
             display: block;
         }
 
         #step2 { display: none; }
-        .success-box { background: rgba(22, 163, 74, 0.10); border: 1px solid rgba(22, 163, 74, 0.20); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
-        .success-box strong { display: block; color: #86efac; font-size: 15px; margin-bottom: 4px; }
-        .success-box span { color: #94a3b8; font-size: 13px; }
+        .success-box { background: rgba(22, 163, 74, 0.10); border: 1px solid rgba(22, 163, 74, 0.20); border-radius: 12px; padding: 10px; margin-bottom: 12px; }
+        .success-box strong { display: block; color: #86efac; font-size: 14px; margin-bottom: 2px; }
+        .success-box span { color: #94a3b8; font-size: 12px; }
     </style>
 </head>
 <body>
 
     <!-- STEP 1 -->
     <div class="card" id="step1">
+        <!-- A-ADS Banner at the Top/First Page -->
+        <div class="ad-container">
+            <span class="ad-label">📢 Advertisement</span>
+            <div id="frame" style="width: 100%; margin: auto; position: relative; z-index: 99998;">
+                <iframe data-aa='2451775' src='//acceptable.a-ads.com/2451775/?size=Adaptive' style='border:0; padding:0; width:100%; height:auto; overflow:hidden; display: block; margin: auto'></iframe>
+            </div>
+        </div>
+
         <span class="icon">🔒</span>
         <h2>Unlock Your File</h2>
         <p>
-            Watch the short ad completely to unlock your file.<br><br>
+            Complete the short ads to unlock your file safely.<br>
             <b>No subscription or payment required.</b>
         </p>
         
-        <button class="btn btn-blue" id="watchAdBtn" onclick="watchAd()">
-            🎬 Watch Ad to Unlock
+        <button class="btn btn-blue" id="watchAdBtn" onclick="startAdSequence()">
+            🎬 Watch Ads to Unlock
         </button>
 
         <!-- ADMIN BYPASS BUTTON (Visible ONLY to Admin ID: 5911965767) -->
         <button class="btn btn-admin" id="adminBypassBtn" onclick="adminBypass()">
-            🛠️ Admin Test Bypass (No Ad)
+            🛠️ Admin Test Bypass (No Ads)
         </button>
 
         <div class="status loading" id="loadingStatus">⏳ Loading advertisement...</div>
         <div class="status error" id="errorStatus"></div>
-        <p class="small-note">Please watch the ad completely to continue.</p>
+        <p class="small-note">Please watch the ads completely to continue.</p>
     </div>
 
     <!-- STEP 2 -->
@@ -113,44 +116,40 @@
         <span class="icon">🎉</span>
         <h2>File Unlocked!</h2>
         <div class="success-box">
-            <strong>✅ Ad Completed Successfully</strong>
+            <strong>✅ Ads Completed Successfully</strong>
             <span>Your file is ready in Telegram.</span>
         </div>
 
-        <!-- Banner Ad Slot -->
+        <!-- Second Banner Ad Slot with Clear Label -->
         <div class="ad-container">
             <span class="ad-label">📢 Sponsored Advertisement</span>
-            <div style="font-size: 12px; color: #94a3b8; padding: 10px;">[ Banner Ad Space ]</div>
+            <ins style="width: 100%; max-width: 300px; height:250px; display:inline-block;" data-width="300" data-height="250" class="a3f7bcb2c16" data-domain="//data527.click" data-affquery="/4c9e2d1775e6a431e226/3f7bcb2c16/?placementName=default"></ins>
+            <script src="//data527.click/js/responsive.js" async></script>
         </div>
 
         <p>Tap the green button below to get your file instantly:</p>
         
-        <button class="btn btn-green" onclick="getFiles()">
+        <button class="btn btn-green" id="getFileBtn" onclick="handleGetFileClick()">
             📥 Get Files Now
         </button>
     </div>
 
     <script>
         const ADMIN_TELEGRAM_ID = 5911965767; // Your Admin ID
+        const ADSTERRA_DIRECT_LINK = "https://auctionr.org/4/81e58572ed11dd7da6900d72d9e31f6d";
+        const BOT_FINAL_URL = "https://t.me/MyFile727_bot?start=VERIFY_AD";
 
         const tg = window.Telegram ? window.Telegram.WebApp : null;
         if (tg) {
             try { 
                 tg.ready(); 
                 tg.expand(); 
-
-                // Check if the current logged-in user is the Admin
                 if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
-                    const currentUserId = tg.initDataUnsafe.user.id;
-                    if (currentUserId === ADMIN_TELEGRAM_ID) {
-                        // Show Admin Bypass Button
+                    if (tg.initDataUnsafe.user.id === ADMIN_TELEGRAM_ID) {
                         document.getElementById("adminBypassBtn").style.display = "flex";
-                        console.log("Admin mode active: Bypass button enabled.");
                     }
                 }
-            } catch (error) { 
-                console.log("Telegram WebApp init error:", error); 
-            }
+            } catch (error) { console.log(error); }
         }
 
         const step1 = document.getElementById("step1");
@@ -159,8 +158,8 @@
         const loadingStatus = document.getElementById("loadingStatus");
         const errorStatus = document.getElementById("errorStatus");
 
-        function showLoading(message) {
-            loadingStatus.textContent = message;
+        function showLoading(msg) {
+            loadingStatus.textContent = msg;
             loadingStatus.style.display = "block";
             errorStatus.style.display = "none";
             watchAdBtn.disabled = true;
@@ -171,9 +170,9 @@
             watchAdBtn.disabled = false;
         }
 
-        function showError(message) {
+        function showError(msg) {
             loadingStatus.style.display = "none";
-            errorStatus.textContent = message;
+            errorStatus.textContent = msg;
             errorStatus.style.display = "block";
             watchAdBtn.disabled = false;
         }
@@ -184,41 +183,57 @@
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
-        // Normal User Ad Watch Flow
-        async function watchAd() {
+        // --- DOUBLE AD SEQUENCE (Monetag Ad 1 + Ad 2) ---
+        async function startAdSequence() {
             errorStatus.style.display = "none";
             if (typeof window.show_11452552 !== "function") {
-                showError("Advertisement is not ready yet. Please try again in a few seconds.");
+                showError("Advertisements are loading. Please try again in a few seconds.");
                 return;
             }
 
             try {
-                showLoading("⏳ Please wait, advertisement is loading...");
+                // Ad 1: Monetag
+                showLoading("⏳ Loading Ad 1 of 2...");
                 await window.show_11452552();
+
+                // Ad 2: Second Ad (Simulated / or second network call if available, e.g. 3-sec delay or second script)
+                showLoading("⏳ Loading Ad 2 of 2 (Almost done)...");
+                await new Promise(resolve => setTimeout(resolve, 3000)); // Small pause/buffer for 2nd ad duration
+
                 hideLoading();
                 showStep2();
             } catch (error) {
-                console.error("Ad error:", error);
-                showError("⚠️ The ad was not completed. Please watch the full ad and try again.");
+                console.error("Ad sequence error:", error);
+                showError("⚠️ Ads were not completed fully. Please watch both ads to continue.");
             }
         }
 
-        // Admin Secret Bypass Function (Skips Monetag Ad for you)
+        // Admin Bypass
         function adminBypass() {
-            console.log("Admin bypass triggered.");
             showStep2();
         }
 
-        function getFiles() {
-            const botUrl = "https://t.me/MyFile727_bot?start=VERIFY_AD";
-            if (tg && typeof tg.openTelegramLink === "function") {
-                try {
-                    tg.openTelegramLink(botUrl);
-                    setTimeout(() => { try { tg.close(); } catch (e) {} }, 300);
-                    return;
-                } catch (e) {}
+        // --- SMART ADSTERRA DIRECT LINK & BOT REDIRECT LOGIC ---
+        function handleGetFileClick() {
+            // Check if user has already clicked the direct link in this session
+            const hasSeenDirectLink = sessionStorage.getItem("adsterra_clicked");
+
+            if (!hasSeenDirectLink) {
+                // First time click: Open Adsterra Direct Link in a new tab/window, mark as seen
+                sessionStorage.setItem("adsterra_clicked", "true");
+                window.open(ADSTERRA_DIRECT_LINK, "_blank");
+            } else {
+                // Second time click onwards: Directly send them to the Telegram Bot to get the file!
+                const botUrl = BOT_FINAL_URL;
+                if (tg && typeof tg.openTelegramLink === "function") {
+                    try {
+                        tg.openTelegramLink(botUrl);
+                        setTimeout(() => { try { tg.close(); } catch (e) {} }, 300);
+                        return;
+                    } catch (e) {}
+                }
+                window.location.href = botUrl;
             }
-            window.location.href = botUrl;
         }
     </script>
 </body>
