@@ -5,14 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Veronica Bot - Unlock Content</title>
 
+    <!-- RichAds Telegram Ads Controller -->
+    <script src="https://richinfo.co/richpartners/telegram/js/tg-ob.js"></script>
+    <script>
+        window.TelegramAdsController = new TelegramAdsController();
+        window.TelegramAdsController.initialize({
+          pubId: "885469",
+          appId: "9563",
+        });
+    </script>
+
     <!-- Telegram WebApp SDK -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
     <!-- Monetag Rewarded SDK -->
     <script src="https://libtl.com/sdk.js" data-zone="11452552" data-sdk="show_11452552"></script>
-
-    <!-- OnClick / ClickAdilla TMA SDK -->
-    <script src="https://js.onclckvd.com/in-stream-ad-admanager/tma.js"></script>
 
     <style>
         * { box-sizing: border-box; }
@@ -58,17 +65,16 @@
         .status.loading { background: rgba(59, 130, 246, 0.12); color: #93c5fd; }
         .small-note { margin-top: 12px; margin-bottom: 0; font-size: 11px; color: #64748b; }
         
-        /* Clear Ad Container Design to prevent confusion */
         .ad-container {
             margin: 12px 0;
             padding: 8px;
             background: rgba(255, 255, 255, 0.02);
-            border: 1px dashed rgba(239, 68, 68, 0.3); /* Slightly reddish dashed border to indicate sponsored */
+            border: 1px dashed rgba(239, 68, 68, 0.3);
             border-radius: 10px;
         }
         .ad-label {
             font-size: 10px;
-            color: #f87171; /* Warning/Notice color for Ad label */
+            color: #f87171;
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: 6px;
@@ -86,7 +92,6 @@
 
     <!-- STEP 1 -->
     <div class="card" id="step1">
-        <!-- A-ADS Banner at the Top with clear label -->
         <div class="ad-container">
             <span class="ad-label">📢 Sponsored Ad (Do Not Click)</span>
             <div id="frame" style="width: 100%; margin: auto; position: relative; z-index: 99998;">
@@ -105,7 +110,7 @@
             🎬 Watch Ads to Unlock
         </button>
 
-        <!-- ADMIN BYPASS BUTTON (Visible ONLY to Admin ID: 5911965767) -->
+        <!-- ADMIN BYPASS BUTTON -->
         <button class="btn btn-admin" id="adminBypassBtn" onclick="adminBypass()">
             🛠️ Admin Test Bypass (No Ads)
         </button>
@@ -124,7 +129,6 @@
             <span>Your file is ready in Telegram.</span>
         </div>
 
-        <!-- Second Banner Ad Slot with prominent Sponsored Label so users won't get confused -->
         <div class="ad-container">
             <span class="ad-label">📢 Advertisement Banner</span>
             <ins style="width: 100%; max-width: 300px; height:250px; display:inline-block;" data-width="300" data-height="250" class="a3f7bcb2c16" data-domain="//data527.click" data-affquery="/4c9e2d1775e6a431e226/3f7bcb2c16/?placementName=default"></ins>
@@ -139,15 +143,9 @@
     </div>
 
     <script>
-        const ADMIN_TELEGRAM_ID = 5911965767; // Your Admin ID
+        const ADMIN_TELEGRAM_ID = 5911965767;
         const ADSTERRA_DIRECT_LINK = "https://auctionr.org/4/81e58572ed11dd7da6900d72d9e31f6d";
         const BOT_FINAL_URL = "https://t.me/MyFile727_bot?start=VERIFY_AD";
-
-        // Initialize OnClick TMA Ad Engine
-        let onClickShowAd = null;
-        window.initCdTma?.({ id: '2451775' }).then(show => { // Replace '2451775' with your actual OnClick Spot ID if different
-            onClickShowAd = show;
-        }).catch(e => console.log("OnClick TMA Init Error:", e));
 
         const tg = window.Telegram ? window.Telegram.WebApp : null;
         if (tg) {
@@ -193,42 +191,44 @@
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
-        // --- DOUBLE AD SEQUENCE (Monetag Ad 1 + OnClick TMA Ad 2) ---
+        // --- AD SEQUENCE (Monetag + RichAds Controller) ---
         async function startAdSequence() {
             errorStatus.style.display = "none";
-            if (typeof window.show_11452552 !== "function") {
-                showError("Advertisements are loading. Please try again in a few seconds.");
-                return;
-            }
-
+            
             try {
                 // Ad 1: Monetag Rewarded Ad
-                showLoading("⏳ Loading Ad 1 of 2...");
-                await window.show_11452552();
-
-                // Ad 2: OnClick TMA Ad
-                showLoading("⏳ Loading Ad 2 of 2...");
-                if (typeof onClickShowAd === "function") {
-                    await onClickShowAd();
+                if (typeof window.show_11452552 === "function") {
+                    showLoading("⏳ Loading Ad 1 of 2...");
+                    await window.show_11452552();
                 } else {
-                    // Fallback small delay if onclick engine is still warming up
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+
+                // Ad 2: RichAds Trigger / Fallback
+                showLoading("⏳ Loading Ad 2 of 2...");
+                if (window.TelegramAdsController && typeof window.TelegramAdsController.show === "function") {
+                    try {
+                        await window.TelegramAdsController.show();
+                    } catch (err) {
+                        console.log("RichAds show error:", err);
+                    }
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
                 }
 
                 hideLoading();
                 showStep2();
             } catch (error) {
                 console.error("Ad sequence error:", error);
-                showError("⚠️ Ads were not completed fully. Please watch both ads to continue.");
+                hideLoading();
+                showStep2();
             }
         }
 
-        // Admin Bypass
         function adminBypass() {
             showStep2();
         }
 
-        // --- SMART ADSTERRA DIRECT LINK & BOT REDIRECT LOGIC ---
         function handleGetFileClick() {
             const hasSeenDirectLink = sessionStorage.getItem("adsterra_clicked");
 
