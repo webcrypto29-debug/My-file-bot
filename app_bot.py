@@ -5,6 +5,7 @@ import threading
 import uuid
 import pymongo
 import dns.resolver
+import requests
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (
@@ -75,6 +76,16 @@ def get_ad_status():
         print(f"DB Error (get_ad_status): {e}")
     return True
 
+def get_current_earn_link():
+    try:
+        st = settings_col.find_one({"_id": "earn_link"})
+        if st and st.get("link"):
+            return st.get("link")
+    except Exception:
+        pass
+    # Default initial earning/referral link
+    return "https://t.me/MailTaskProBot?start=5911965767"
+
 async def delete_message_after_delay(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int):
     await asyncio.sleep(delay)
     try:
@@ -107,6 +118,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not user:
         return
     user_id = user.id
+
+    # Ads Galaxy Integration Ping
+    try:
+        await asyncio.to_thread(
+            requests.get,
+            "https://app.adsgalaxy.online/api/bot/integration/235/sysbraLOEEQ6ocZK8-yIK9YtHvcJRsLL366eNluVp-Y",
+            params={"user_id": user_id},
+            timeout=3
+        )
+    except Exception as e:
+        print(f"Ads Galaxy Ping Error: {e}")
 
     try:
         user_doc = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
@@ -187,7 +209,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_response("🔒 **File Locked!**\n\n👇 Click below to watch a quick ad and unlock your file:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
 
-    await send_response("👋 Welcome to Veronica Bot!\n\nStart - Start the bot or receive requested files")
+    earn_link = get_current_earn_link()
+    keyboard = [[InlineKeyboardButton("🔥 Earn Extra Money / Tasks", url=earn_link)]]
+    await send_response("👋 Welcome to Veronica Bot!\n\nSend your file link to download files safely.", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def send_requested_item_direct(context, user_id, session):
     item_id = session["id"]
@@ -237,6 +261,16 @@ async def send_requested_item_direct(context, user_id, session):
                         if sent_msg:
                             asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
                         await asyncio.sleep(0.5)
+
+        # Post-download Dynamic Earning / Referral Hub Button
+        current_earn_link = get_current_earn_link()
+        earn_keyboard = [[InlineKeyboardButton("🔥 Complete Tasks & Earn Extra Money", url=current_earn_link)]]
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="✨ **Want to earn extra money online?**\n\nClick below to participate in tasks and referral programs:",
+            reply_markup=InlineKeyboardMarkup(earn_keyboard)
+        )
+
     except Exception as e:
         print(f"Delivery Error: {e}")
 
@@ -325,26 +359,40 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             context.args = [param] if param not in ["NO_PARAM", "None"] else []
             await start(update, context)
 
-# ----------------- ADMIN COMMANDS (WITH BROADCAST CONTROL) -----------------
+# ----------------- ADMIN COMMANDS (WITH BROADCAST & EARN LINK CONTROL) -----------------
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
+    current_link = get_current_earn_link()
     text = (
-        "🛠 **Admin Commands Guide:**\n\n"
-        "start - Start the bot or receive requested files\n"
-        "stats - View total users and bot statistics\n"
-        "genlink - Reply to a file/message to generate a single link\n"
-        "sendad - Broadcast message with rich ads or buttons\n"
-        "stopbroadcast - Stop the ongoing broadcast process\n"
-        "deletebroadcast - Delete all broadcasted messages from users\n"
-        "batch - Toggle batch mode to create multi-file links\n"
-        "admin - Open admin panel and view help instructions\n"
-        "togglead - Enable or disable the watch-ad system\n"
-        "addchannel - Add a force-subscription channel\n"
-        "delchannel - Remove a force-subscription channel\n"
-        "channels - View list of all force-sub channels\n"
-        "myfiles - Manage and delete stored database files"
+        f"🛠 **Admin Commands Guide:**\n\n"
+        f"start - Start the bot or receive requested files\n"
+        f"stats - View total users and bot statistics\n"
+        f"genlink - Reply to a file/message to generate a single link\n"
+        f"sendad - Broadcast message with rich ads or buttons\n"
+        f"stopbroadcast - Stop the ongoing broadcast process\n"
+        f"deletebroadcast - Delete all broadcasted messages from users\n"
+        f"batch - Toggle batch mode to create multi-file links\n"
+        f"admin - Open admin panel and view help instructions\n"
+        f"togglead - Enable or disable the watch-ad system\n"
+        f"addchannel - Add a force-subscription channel\n"
+        f"delchannel - Remove a force-subscription channel\n"
+        f"channels - View list of all force-sub channels\n"
+        f"myfiles - Manage and delete stored database files\n"
+        f"setearnlink - Change earning/referral link (`/setearnlink <new_link>`)\n\n"
+        f"🔗 **Current Earning Link:** `{current_link}`"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
+
+async def set_earn_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        current = get_current_earn_link()
+        await update.message.reply_text(f"⚠️ Use: `/setearnlink <URL>`\n\nCurrent Link: `{current}`", parse_mode="Markdown")
+        return
+    new_link = args[0].strip()
+    settings_col.update_one({"_id": "earn_link"}, {"$set": {"link": new_link}}, True)
+    await update.message.reply_text(f"✅ **Earning Link Updated Successfully!**\n\nNew Link: `{new_link}`", parse_mode="Markdown")
 
 async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -533,11 +581,12 @@ def main():
     app.add_handler(CommandHandler("delchannel", del_channel))
     app.add_handler(CommandHandler("channels", list_channels))
     app.add_handler(CommandHandler("stats", stats_command))
+    app.add_handler(CommandHandler("setearnlink", set_earn_link))
     
     app.add_handler(CallbackQueryHandler(admin_callback_handler))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started with full file delete fix & commands.")
+    print("Bot started with Ads Galaxy integration & dynamic earn link support.")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
