@@ -1,554 +1,588 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0,
-                   maximum-scale=1.0, user-scalable=no">
-
-    <title>Veronica Bot - Unlock Content</title>
-
-    <!-- Telegram WebApp SDK -->
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-    <!-- Monetag Rewarded SDK -->
-    <script
-        src="https://libtl.com/sdk.js"
-        data-zone="11452552"
-        data-sdk="show_11452552">
-    </script>
-
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            background-color: #0b1120;
-            color: #ffffff;
-            font-family:
-                -apple-system,
-                BlinkMacSystemFont,
-                "Segoe UI",
-                Roboto,
-                Helvetica,
-                Arial,
-                sans-serif;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            min-height: 100vh;
-
-            margin: 0;
-            padding: 16px;
-
-            text-align: center;
-        }
-
-        .card {
-            background-color: #172033;
-
-            padding: 26px 18px;
-
-            border-radius: 20px;
-
-            box-shadow:
-                0 10px 30px rgba(0, 0, 0, 0.40);
-
-            max-width: 380px;
-            width: 100%;
-
-            border: 1px solid rgba(255, 255, 255, 0.06);
-        }
-
-        .icon {
-            font-size: 46px;
-
-            margin-bottom: 10px;
-
-            display: block;
-        }
-
-        h2 {
-            margin: 0 0 10px 0;
-
-            font-size: 22px;
-
-            font-weight: 700;
-
-            color: #ffffff;
-        }
-
-        p {
-            color: #94a3b8;
-
-            font-size: 14px;
-
-            line-height: 1.55;
-
-            margin: 0 0 18px 0;
-        }
-
-        p b {
-            color: #e2e8f0;
-        }
-
-        .btn {
-            color: #ffffff;
-
-            border: none;
-
-            padding: 14px 20px;
-
-            font-size: 16px;
-
-            font-weight: 650;
-
-            border-radius: 12px;
-
-            cursor: pointer;
-
-            width: 100%;
-
-            display: flex;
-
-            align-items: center;
-
-            justify-content: center;
-
-            gap: 8px;
-
-            transition:
-                transform 0.1s ease,
-                opacity 0.2s ease;
-
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .btn:active {
-            transform: scale(0.98);
-        }
-
-        .btn:disabled {
-            opacity: 0.65;
-
-            cursor: not-allowed;
-
-            transform: none;
-        }
-
-        .btn-blue {
-            background-color: #2563eb;
-        }
-
-        .btn-green {
-            background-color: #16a34a;
-        }
-
-        .status {
-            display: none;
-
-            margin-top: 14px;
-
-            padding: 10px 12px;
-
-            border-radius: 10px;
-
-            font-size: 13px;
-
-            line-height: 1.4;
-        }
-
-        .status.error {
-            background: rgba(239, 68, 68, 0.12);
-
-            color: #fca5a5;
-        }
-
-        .status.loading {
-            background: rgba(59, 130, 246, 0.12);
-
-            color: #93c5fd;
-        }
-
-        .small-note {
-            margin-top: 14px;
-
-            margin-bottom: 0;
-
-            font-size: 12px;
-
-            color: #64748b;
-        }
-
-        #step2 {
-            display: none;
-        }
-
-        .success-box {
-            background: rgba(22, 163, 74, 0.10);
-
-            border: 1px solid rgba(22, 163, 74, 0.20);
-
-            border-radius: 12px;
-
-            padding: 12px;
-
-            margin-bottom: 18px;
-        }
-
-        .success-box strong {
-            display: block;
-
-            color: #86efac;
-
-            font-size: 15px;
-
-            margin-bottom: 4px;
-        }
-
-        .success-box span {
-            color: #94a3b8;
-
-            font-size: 13px;
-        }
-    </style>
-</head>
-
-<body>
-
-    <!-- =========================
-         STEP 1
-         ========================= -->
-
-    <div class="card" id="step1">
-
-        <span class="icon">🔒</span>
-
-        <h2>Unlock Your File</h2>
-
-        <p>
-            Watch the short ad completely to unlock your file.
-            <br><br>
-            <b>No subscription or payment required.</b>
-        </p>
-
-        <button
-            class="btn btn-blue"
-            id="watchAdBtn"
-            onclick="watchAd()">
-
-            🎬 Watch Ad to Unlock
-        </button>
-
-        <div
-            class="status loading"
-            id="loadingStatus">
-
-            ⏳ Loading advertisement...
-        </div>
-
-        <div
-            class="status error"
-            id="errorStatus">
-
-        </div>
-
-        <p class="small-note">
-            Please watch the ad completely to continue.
-        </p>
-
-    </div>
-
-
-    <!-- =========================
-         STEP 2
-         ========================= -->
-
-    <div class="card" id="step2">
-
-        <span class="icon">🎉</span>
-
-        <h2>File Unlocked!</h2>
-
-        <div class="success-box">
-
-            <strong>✅ Ad Completed Successfully</strong>
-
-            <span>
-                Your file is ready in Telegram.
-            </span>
-
-        </div>
-
-        <p>
-            Tap the button below to get your file.
-        </p>
-
-        <button
-            class="btn btn-green"
-            onclick="getFiles()">
-
-            📥 Get Files
-        </button>
-
-    </div>
-
-
-    <script>
-
-        /* ==========================================
-           TELEGRAM WEB APP
-           ========================================== */
-
-        const tg = window.Telegram
-            ? window.Telegram.WebApp
-            : null;
-
-        if (tg) {
-            try {
-                tg.ready();
-                tg.expand();
-            } catch (error) {
-                console.log("Telegram WebApp initialization error:", error);
+import os
+import time
+import asyncio
+import threading
+import uuid
+import pymongo
+import dns.resolver
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, ContextTypes, filters
+)
+
+# ----------------- SERVER KEEP-ALIVE -----------------
+class SimpleHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"Bot is active and running!")
+
+    def log_message(self, format, *args):
+        return
+
+def run_web_server():
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleHandler)
+    server.serve_forever()
+
+threading.Thread(target=run_web_server, daemon=True).start()
+
+# Termux / DNS Fix
+try:
+    dns.resolver.default_resolver = dns.resolver.Resolver(configure=False)
+    dns.resolver.default_resolver.nameservers = ['8.8.8.8', '8.8.4.4']
+except Exception:
+    pass
+
+# ----------------- CONFIGURATION -----------------
+TOKEN = os.environ.get("BOT_TOKEN", "8737537284:AAGtP8lwqR3LRwAy4ZWg5iyQG8SdNcFW6fg")
+MINI_APP_URL = "https://webcrypto29-debug.github.io/My-file-bot/"
+BOT_USERNAME = "MyFile727_bot"
+
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://n2665099_db_user:sagar_sagr@cluster0.2h1q2w8.mongodb.net/?appName=Cluster0&tlsAllowInvalidCertificates=true")
+ADMIN_ID = 5911965767
+
+# Warning Caption Text & Auto-Delete Timer (30 minutes)
+WARNING_TEXT = (
+    "⚠️ 𝗪𝗔𝗥𝗡𝗜𝗡𝗚 ⚠️\n\n"
+    "𝗕𝗲𝗳𝗼𝗿𝗲 𝗗𝗼𝘄𝗻𝗹𝗼𝗮𝗱𝗶𝗻𝗴 𝘁𝗵𝗲 𝗘𝗽𝗶𝘀𝗼𝗱𝗲(𝘀) 𝗣𝗹𝗲𝗮𝘀𝗲 𝗙𝗼𝗿𝘄𝗮𝗿𝗱 𝗧𝗵𝗲𝗺 𝘁𝗼 "
+    "𝗦𝗮𝘃𝗲𝗱 𝗠𝗲𝘀𝘀𝗮𝗴𝗲𝘀 𝗼𝗿 𝗔𝗻𝗼𝘁𝗵𝗲𝗿 𝗖𝗵𝗮𝘁, 𝗛𝗲𝗿𝗲 𝗧𝗵𝗲𝘆 𝗪𝗶𝗹𝗹 𝗕𝗲 𝗗𝗲𝗹𝗲𝘁𝗲𝗱 𝗜𝗻 𝟯𝟬 𝗠𝗶𝗻𝘂𝘁𝗲𝘀 "
+    "𝗧𝗼 𝗔𝘃𝗼𝗶𝗱 𝗖𝗼𝗽𝘆𝗿𝗶𝗴𝗵𝘁 𝗶𝘀𝘀𝘂𝗲𝘀"
+)
+DELETE_TIME_SECONDS = 1800  # 30 Minutes * 60 Seconds
+
+# ----------------- DATABASE SETUP -----------------
+mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+db = mongo_client["FileBotDB"]
+files_col = db["files"]
+batch_col = db["batches"]
+users_col = db["users"]
+channels_col = db["fsub_channels"]
+settings_col = db["settings"]
+broadcast_history_col = db["broadcast_history"]
+sessions_col = db["sessions"]
+
+broadcast_control = {"is_running": False}
+admin_states = {}
+batch_sessions = {}
+
+def get_ad_status():
+    try:
+        st = settings_col.find_one({"_id": "ad_status"})
+        if st:
+            return st.get("status", True)
+    except Exception as e:
+        print(f"DB Error (get_ad_status): {e}")
+    return True
+
+# ----------------- HELPER: AUTO DELETE -----------------
+async def delete_message_after_delay(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int):
+    """Background task to delete a message after specified delay (30 mins)."""
+    await asyncio.sleep(delay)
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        print(f"✅ Auto-deleted message {message_id} from chat {chat_id}")
+    except Exception as e:
+        print(f"❌ Failed to auto-delete message {message_id}: {e}")
+
+# ----------------- HELPER: FORCE SUB CHECK -----------------
+async def check_force_sub(bot, user_id):
+    try:
+        channels = await asyncio.to_thread(lambda: list(channels_col.find()))
+    except Exception as e:
+        print(f"DB Error fetching channels: {e}")
+        return []
+
+    if not channels:
+        return []
+
+    unjoined = []
+    for ch in channels:
+        ch_id = ch["_id"]
+        try:
+            member = await asyncio.wait_for(
+                bot.get_chat_member(chat_id=ch_id, user_id=user_id),
+                timeout=2.5
+            )
+            if member.status not in ["member", "administrator", "creator"]:
+                unjoined.append(ch)
+        except asyncio.TimeoutError:
+            print(f"Force Sub Timeout for channel {ch_id}.")
+            continue
+        except Exception as e:
+            print(f"Error checking channel {ch_id}: {e}")
+            continue
+            
+    return unjoined
+
+# ----------------- CORE START & FLOW HANDLER -----------------
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if not user:
+        return
+    user_id = user.id
+
+    # Register user in DB for broadcasts/stats (without credits)
+    try:
+        user_doc = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
+        if not user_doc:
+            await asyncio.to_thread(users_col.insert_one, {"_id": user_id})
+    except Exception as e:
+        print(f"User DB Registration Error: {e}")
+    
+    is_callback = update.callback_query is not None
+    if is_callback:
+        try:
+            await update.callback_query.answer()
+        except Exception:
+            pass
+    
+    async def send_response(text, reply_markup=None, parse_mode="Markdown"):
+        try:
+            if is_callback and update.callback_query and update.callback_query.message:
+                await update.callback_query.message.edit_text(text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+            else:
+                await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+        except Exception as e:
+            print(f"Send Response Error: {e}")
+            try:
+                await context.bot.send_message(chat_id=user_id, text=text, reply_markup=reply_markup, parse_mode=parse_mode)
+            except Exception:
+                pass
+
+    args = context.args if hasattr(context, "args") and context.args else []
+
+    # 1. FORCE SUB VERIFICATION
+    unjoined = await check_force_sub(context.bot, user_id)
+    if unjoined:
+        keyboard = []
+        for ch in unjoined:
+            link = ch.get("link", f"https://t.me/{str(ch['_id']).replace('@', '')}")
+            keyboard.append([InlineKeyboardButton(f"Join {ch.get('title', 'Channel')} 📢", url=link)])
+        
+        param_val = args[0] if (args and len(args) > 0) else "NO_PARAM"
+        keyboard.append([InlineKeyboardButton("Joined! Check Now 🔄", callback_data=f"check_fsub_{param_val}")])
+        
+        msg_text = "⚠️ **Must Join Channels!**\n\nTo access files/links, please join our required channels first:"
+        await send_response(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
+        return
+
+    # 2. AD VERIFICATION LOGIC (Every click requires ad watch)
+    if args and len(args) > 0 and args[0] == "VERIFY_AD":
+        user_session = await asyncio.to_thread(sessions_col.find_one, {"_id": user_id})
+        
+        if not user_session:
+            await send_response("⚠️ No active file session found. Please open your share link again.")
+            return
+
+        if user_session.get("verified", False):
+            await send_response("⚠️ This verification session is already used. Please open your file link again.")
+            return
+
+        click_time = user_session.get("click_time", 0)
+        if time.time() - click_time < 3:
+            await send_response("⚠️ **Verification Failed!**\n\nThe ad was not watched completely. Please try again.")
+            return
+
+        # Mark session as verified
+        await asyncio.to_thread(sessions_col.update_one, {"_id": user_id}, {"$set": {"verified": True}})
+
+        await send_response("🎉 **Ad Completed Successfully!**\n\n📥 Delivering your file now...")
+        await send_requested_item_direct(context, user_id, user_session)
+        return
+
+    # 3. FILE / BATCH DOWNLOAD REQUEST
+    if args and len(args) > 0 and args[0] not in ["NO_PARAM", "None", "VERIFY_AD"]:
+        param = args[0]
+        file_doc = await asyncio.to_thread(files_col.find_one, {"_id": param})
+        batch_doc = await asyncio.to_thread(batch_col.find_one, {"_id": param})
+
+        if file_doc or batch_doc:
+            session_info = {
+                "_id": user_id,
+                "type": "batch" if batch_doc else "single",
+                "id": param,
+                "verified": False,
+                "click_time": time.time()
             }
-        }
-
-
-        /* ==========================================
-           ELEMENTS
-           ========================================== */
-
-        const step1 =
-            document.getElementById("step1");
-
-        const step2 =
-            document.getElementById("step2");
-
-        const watchAdBtn =
-            document.getElementById("watchAdBtn");
-
-        const loadingStatus =
-            document.getElementById("loadingStatus");
-
-        const errorStatus =
-            document.getElementById("errorStatus");
-
-
-        /* ==========================================
-           UI HELPERS
-           ========================================== */
-
-        function showLoading(message) {
-
-            loadingStatus.textContent = message;
-
-            loadingStatus.style.display = "block";
-
-            errorStatus.style.display = "none";
-
-            watchAdBtn.disabled = true;
-        }
-
-
-        function hideLoading() {
-
-            loadingStatus.style.display = "none";
-
-            watchAdBtn.disabled = false;
-        }
-
-
-        function showError(message) {
-
-            loadingStatus.style.display = "none";
-
-            errorStatus.textContent = message;
-
-            errorStatus.style.display = "block";
-
-            watchAdBtn.disabled = false;
-        }
-
-
-        function showStep2() {
-
-            step1.style.display = "none";
-
-            step2.style.display = "block";
-
-            window.scrollTo({
-                top: 0,
-                behavior: "smooth"
-            });
-        }
-
-
-        /* ==========================================
-           MONETAG REWARDED AD
-           ========================================== */
-
-        async function watchAd() {
-
-            errorStatus.style.display = "none";
-
-            /*
-             * IMPORTANT:
-             * No fallback unlock is used here.
-             *
-             * If Monetag is unavailable,
-             * the file will NOT unlock.
-             */
-
-            if (
-                typeof window.show_11452552 !== "function"
-            ) {
-
-                showError(
-                    "Advertisement is not ready yet. Please try again in a few seconds."
-                );
-
-                return;
-            }
-
-
-            try {
-
-                showLoading(
-                    "⏳ Please wait, advertisement is loading..."
-                );
-
-
-                /*
-                 * Monetag rewarded advertisement
-                 *
-                 * The promise resolves after the
-                 * rewarded ad has successfully completed.
-                 */
-
-                await window.show_11452552();
-
-
-                /*
-                 * Rewarded ad completed successfully.
-                 *
-                 * Now and ONLY now move to Step 2.
-                 */
-
-                hideLoading();
-
-                showStep2();
-
-            }
-
-            catch (error) {
-
-                console.error(
-                    "Monetag rewarded ad error:",
-                    error
-                );
-
-                showError(
-                    "⚠️ The ad was not completed. Please watch the full ad and try again."
-                );
-            }
-        }
-
-
-        /* ==========================================
-           GET FILE
-           ========================================== */
-
-        function getFiles() {
-
-            const botUrl =
-                "https://t.me/MyFile727_bot?start=VERIFY_AD";
-
-
-            /*
-             * Telegram WebApp
-             */
-
-            if (
-                tg &&
-                typeof tg.openTelegramLink === "function"
-            ) {
-
-                try {
-
-                    tg.openTelegramLink(botUrl);
-
-                    /*
-                     * Close Mini App after opening
-                     * Telegram bot.
-                     */
-
-                    setTimeout(() => {
-
-                        try {
-                            tg.close();
-                        } catch (error) {
-                            console.log(
-                                "Telegram close error:",
-                                error
-                            );
-                        }
-
-                    }, 300);
-
-                    return;
-
-                }
-
-                catch (error) {
-
-                    console.error(
-                        "Telegram link error:",
-                        error
-                    );
-                }
-            }
-
-
-            /*
-             * Normal browser fallback
-             */
-
-            window.location.href = botUrl;
-        }
-
-
-        /* ==========================================
-           PAGE LOAD
-           ========================================== */
-
-        window.addEventListener(
-            "DOMContentLoaded",
-            () => {
-
-                console.log(
-                    "Veronica Bot unlock page loaded."
-                );
-
-                /*
-                 * We intentionally DO NOT:
-                 *
-                 * - load RichAds
-                 * - load A-ADS
-                 * - load Coinzilla
-                 * - manually create impression URLs
-                 * - unlock without Monetag
-                 *
-                 * Monetag is the only ad used here.
-                 */
-            }
-        );
-
-    </script>
-
-</body>
-</html>
-```
+            await asyncio.to_thread(sessions_col.update_one, {"_id": user_id}, {"$set": session_info}, True)
+
+            if not get_ad_status():
+                await send_requested_item_direct(context, user_id, session_info)
+                return
+
+            # Always require watching an ad per click
+            keyboard = [[InlineKeyboardButton("Watch Ad Now 🚀", web_app=WebAppInfo(url=MINI_APP_URL))]]
+            await send_response(
+                "🔒 **File Locked!**\n\n👇 Click below to watch a quick ad and unlock your file instantly:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+
+    # 4. DEFAULT START RESPONSE
+    await send_response(
+        f"👋 Welcome to Veronica Bot!\n\nSend or click any file link to download content!"
+    )
+
+# ----------------- DIRECT FILE DELIVERY (WITH AUTO-DELETE) -----------------
+async def send_requested_item_direct(context, user_id, session):
+    item_id = session["id"]
+    item_type = session["type"]
+
+    try:
+        if item_type == "single":
+            doc = await asyncio.to_thread(files_col.find_one, {"_id": item_id})
+            if doc:
+                itype = doc.get("item_type")
+                orig_cap = doc.get("caption", "")
+                full_caption = f"{orig_cap}\n\n{WARNING_TEXT}".strip() if orig_cap else WARNING_TEXT
+                
+                sent_msg = None
+                if itype == "text":
+                    text_content = f"{doc['text']}\n\n{WARNING_TEXT}"
+                    sent_msg = await context.bot.send_message(chat_id=user_id, text=text_content)
+                elif itype == "photo":
+                    sent_msg = await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=full_caption)
+                elif itype == "video":
+                    sent_msg = await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=full_caption)
+                else:
+                    sent_msg = await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=full_caption)
+
+                if sent_msg:
+                    asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
+
+        elif item_type == "batch":
+            batch_doc = await asyncio.to_thread(batch_col.find_one, {"_id": item_id})
+            if batch_doc:
+                for f_id in batch_doc.get("files", []):
+                    doc = await asyncio.to_thread(files_col.find_one, {"_id": f_id})
+                    if doc:
+                        itype = doc.get("item_type")
+                        orig_cap = doc.get("caption", "")
+                        full_caption = f"{orig_cap}\n\n{WARNING_TEXT}".strip() if orig_cap else WARNING_TEXT
+                        
+                        sent_msg = None
+                        if itype == "text":
+                            text_content = f"{doc['text']}\n\n{WARNING_TEXT}"
+                            sent_msg = await context.bot.send_message(chat_id=user_id, text=text_content)
+                        elif itype == "photo":
+                            sent_msg = await context.bot.send_photo(chat_id=user_id, photo=doc["file_id"], caption=full_caption)
+                        elif itype == "video":
+                            sent_msg = await context.bot.send_video(chat_id=user_id, video=doc["file_id"], caption=full_caption)
+                        else:
+                            sent_msg = await context.bot.send_document(chat_id=user_id, document=doc["file_id"], caption=full_caption)
+
+                        if sent_msg:
+                            asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
+                        await asyncio.sleep(0.5)
+
+    except Exception as e:
+        await context.bot.send_message(chat_id=user_id, text=f"❌ Error delivering content: {str(e)}")
+
+# ----------------- CALLBACK QUERY HANDLER -----------------
+async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+    data = query.data
+
+    if data.startswith("check_fsub_"):
+        param = data.replace("check_fsub_", "")
+        unjoined = await check_force_sub(context.bot, user_id)
+        if unjoined:
+            try:
+                await query.answer("❌ You haven't joined all required channels yet!", show_alert=True)
+            except Exception:
+                pass
+        else:
+            try:
+                await query.answer("✅ Verification successful!")
+            except Exception:
+                pass
+            context.args = [param] if param not in ["NO_PARAM", "None"] else []
+            await start(update, context)
+
+# ----------------- ADD & DELETE FORCE SUB CHANNELS -----------------
+async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ **इस्तेमाल कैसे करें:**\n`/addchannel https://t.me/yourchannel`\nया\n`/addchannel @yourchannel`", parse_mode="Markdown")
+        return
+
+    raw_input = args[0].strip()
+    
+    target_chat = raw_input
+    if "t.me/" in raw_input:
+        target_chat = "@" + raw_input.split("t.me/")[-1].replace("+", "").replace("/", "")
+    elif raw_input.replace("-", "").isdigit():
+        target_chat = int(raw_input)
+
+    try:
+        chat = await context.bot.get_chat(target_chat)
+        bot_member = await context.bot.get_chat_member(chat_id=chat.id, user_id=context.bot.id)
+
+        if bot_member.status not in ["administrator", "creator"]:
+            await update.message.reply_text(
+                f"❌ **बोट एडमिन नहीं है!**\n\nकृपया पहले @{BOT_USERNAME} को **{chat.title}** में **Admin** बनाएँ, फिर इस कमांड को चलाएँ।",
+                parse_mode="Markdown"
+            )
+            return
+
+        invite_link = chat.invite_link
+        if not invite_link and chat.username:
+            invite_link = f"https://t.me/{chat.username}"
+        elif not invite_link:
+            try:
+                invite_link = await context.bot.export_chat_invite_link(chat.id)
+            except Exception:
+                invite_link = raw_input if "t.me" in raw_input else f"https://t.me/{str(chat.id).replace('-100', '')}"
+
+        await asyncio.to_thread(
+            channels_col.update_one,
+            {"_id": chat.id},
+            {"$set": {
+                "link": invite_link, 
+                "title": chat.title, 
+                "username": chat.username.lower() if chat.username else "",
+                "raw_link": raw_input
+            }},
+            True
+        )
+
+        await update.message.reply_text(
+            f"✅ **Force Sub Channel Added!**\n\n📌 **Title:** {chat.title}\n🆔 **ID:** `{chat.id}`\n🔗 **Link:** {invite_link}",
+            parse_mode="Markdown"
+        )
+
+    except Exception as e:
+        await update.message.reply_text(
+            f"❌ **चैनल जोड़ने में समस्या!**\n\nसुनिश्चित करें कि आपने बोट को चैनल में Admin बनाया है।\n\n`Error: {str(e)}`",
+            parse_mode="Markdown"
+        )
+
+async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    args = context.args
+    if not args:
+        await update.message.reply_text("⚠️ **इस्तेमाल कैसे करें:**\n`/delchannel https://t.me/yourchannel`\nया\n`/delchannel @yourchannel`", parse_mode="Markdown")
+        return
+
+    raw_input = args[0].strip()
+    clean_input = raw_input.replace("https://t.me/", "").replace("@", "").lower()
+    
+    deleted_count = 0
+    if raw_input.replace("-", "").isdigit():
+        res = await asyncio.to_thread(channels_col.delete_one, {"_id": int(raw_input)})
+        deleted_count = res.deleted_count
+    else:
+        res = await asyncio.to_thread(channels_col.delete_many, {
+            "$or": [
+                {"username": clean_input},
+                {"raw_link": raw_input},
+                {"link": raw_input}
+            ]
+        })
+        deleted_count = res.deleted_count
+
+    if deleted_count > 0:
+        await update.message.reply_text("✅ Force Sub चैनल सफलतापूर्वक हटा दिया गया!")
+    else:
+        await update.message.reply_text("❌ यह चैनल डेटाबेस में नहीं मिला!")
+
+async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    chs = await asyncio.to_thread(lambda: list(channels_col.find()))
+    if not chs:
+        await update.message.reply_text("📑 कोई Force Sub चैनल रजिस्टर्ड नहीं है।")
+        return
+    text = "📢 **Active Force Sub Channels:**\n\n"
+    for c in chs:
+        text += f"• `{c['_id']}` | [{c.get('title', 'Channel')}]({c.get('link')})\n"
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+# ----------------- ADMIN COMMANDS -----------------
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    text = (
+        "🛠 **Admin Commands Guide:**\n\n"
+        "🔗 `/genlink` - Generate link\n"
+        "📦 `/batch` - Create file batch\n"
+        "📢 `/sendad` - Broadcast message\n"
+        "➕ `/addchannel <link_or_username>` - Add Force Sub\n"
+        "➖ `/delchannel <link_or_username>` - Remove Force Sub\n"
+        "📑 `/channels` - List Force Sub channels\n"
+        "🔘 `/togglead` - Toggle rewarded ads\n"
+        "📊 `/stats` - View stats"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+async def toggle_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    current = get_ad_status()
+    new_status = not current
+    await asyncio.to_thread(settings_col.update_one, {"_id": "ad_status"}, {"$set": {"status": new_status}}, True)
+    status_str = "ENABLED 🟢" if new_status else "DISABLED 🔴"
+    await update.message.reply_text(f"⚙️ Rewarded Ads Mode is now **{status_str}**", parse_mode="Markdown")
+
+async def genlink(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    msg = update.message.reply_to_message
+
+    if msg:
+        unique_id = str(uuid.uuid4())[:8]
+        item_type, file_id = "text", None
+
+        if msg.document: item_type, file_id = "document", msg.document.file_id
+        elif msg.video: item_type, file_id = "video", msg.video.file_id
+        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+        elif msg.text: item_type = "text"
+
+        await asyncio.to_thread(files_col.insert_one, {
+            "_id": unique_id,
+            "item_type": item_type,
+            "file_id": file_id,
+            "caption": msg.caption or "",
+            "text": msg.text or ""
+        })
+
+        link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
+        await update.message.reply_text(f"✅ **Single File Link:**\n\n`{link}`", parse_mode="Markdown")
+        return
+
+    admin_states[update.effective_user.id] = "WAITING_FOR_SINGLE_FILE"
+    await update.message.reply_text("📥 **Send or forward the media/text now...**", parse_mode="Markdown")
+
+async def batch_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    admin_id = update.effective_user.id
+
+    if admin_id in batch_sessions:
+        files = batch_sessions[admin_id]
+        if not files:
+            del batch_sessions[admin_id]
+            await update.message.reply_text("❌ Batch Mode cancelled (no files added).")
+            return
+
+        batch_id = str(uuid.uuid4())[:8]
+        await asyncio.to_thread(batch_col.insert_one, {"_id": batch_id, "files": files})
+        del batch_sessions[admin_id]
+
+        link = f"https://t.me/{BOT_USERNAME}?start={batch_id}"
+        await update.message.reply_text(f"🎉 **Batch Created ({len(files)} items)!**\n\n🔗 Link:\n`{link}`", parse_mode="Markdown")
+    else:
+        batch_sessions[admin_id] = []
+        await update.message.reply_text("📦 **Batch Mode Started!** Send/forward files, then type `/batch` again to finish.")
+
+async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    if not msg or msg.from_user.id != ADMIN_ID: return
+    admin_id = msg.from_user.id
+
+    if admin_states.get(admin_id) == "WAITING_FOR_SINGLE_FILE":
+        unique_id = str(uuid.uuid4())[:8]
+        item_type, file_id = "text", None
+
+        if msg.document: item_type, file_id = "document", msg.document.file_id
+        elif msg.video: item_type, file_id = "video", msg.video.file_id
+        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+        elif msg.text: item_type = "text"
+
+        await asyncio.to_thread(files_col.insert_one, {
+            "_id": unique_id,
+            "item_type": item_type,
+            "file_id": file_id,
+            "caption": msg.caption or "",
+            "text": msg.text or ""
+        })
+
+        del admin_states[admin_id]
+        link = f"https://t.me/{BOT_USERNAME}?start={unique_id}"
+        await update.message.reply_text(f"✅ **Single Link Generated:**\n\n`{link}`", parse_mode="Markdown")
+        return
+
+    if admin_id in batch_sessions:
+        unique_id = str(uuid.uuid4())[:8]
+        item_type, file_id = "text", None
+
+        if msg.document: item_type, file_id = "document", msg.document.file_id
+        elif msg.video: item_type, file_id = "video", msg.video.file_id
+        elif msg.photo: item_type, file_id = "photo", msg.photo[-1].file_id
+        elif msg.text: item_type = "text"
+
+        await asyncio.to_thread(files_col.insert_one, {
+            "_id": unique_id,
+            "item_type": item_type,
+            "file_id": file_id,
+            "caption": msg.caption or "",
+            "text": msg.text or ""
+        })
+
+        batch_sessions[admin_id].append(unique_id)
+        count = len(batch_sessions[admin_id])
+        await update.message.reply_text(f"➕ Item #{count} added to Batch.")
+        return
+
+async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    msg = update.message.reply_to_message
+    if not msg:
+        await update.message.reply_text("⚠️ Reply to a message to broadcast!")
+        return
+
+    broadcast_control["is_running"] = True
+    users = await asyncio.to_thread(lambda: list(users_col.find()))
+    total = len(users)
+    success, failed = 0, 0
+    broadcast_id = str(int(time.time()))
+    sent_details = []
+
+    status_msg = await update.message.reply_text(f"🚀 Broadcast started to {total} users...")
+
+    for u in users:
+        if not broadcast_control["is_running"]:
+            await update.message.reply_text("🛑 Broadcast stopped manually.")
+            break
+        u_id = u["_id"]
+        try:
+            sent = await msg.copy(chat_id=u_id)
+            sent_details.append({"user_id": u_id, "message_id": sent.message_id})
+            success += 1
+        except Exception:
+            failed += 1
+        await asyncio.sleep(0.05)
+
+    await asyncio.to_thread(broadcast_history_col.insert_one, {"_id": broadcast_id, "sent_details": sent_details})
+    broadcast_control["is_running"] = False
+    await status_msg.edit_text(f"✅ **Broadcast Completed!**\n🎯 Success: {success}\n❌ Failed: {failed}", parse_mode="Markdown")
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    total_users = await asyncio.to_thread(users_col.count_documents, {})
+    total_files = await asyncio.to_thread(files_col.count_documents, {})
+    total_batches = await asyncio.to_thread(batch_col.count_documents, {})
+    await update.message.reply_text(f"📊 **Stats:**\n👥 Users: {total_users}\n📁 Files: {total_files}\n📦 Batches: {total_batches}")
+
+# ----------------- MAIN INITIALIZATION -----------------
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("admin", admin_panel))
+    app.add_handler(CommandHandler("togglead", toggle_ad))
+    app.add_handler(CommandHandler("genlink", genlink))
+    app.add_handler(CommandHandler("batch", batch_command))
+    app.add_handler(CommandHandler("sendad", send_ad))
+    app.add_handler(CommandHandler("addchannel", add_channel))
+    app.add_handler(CommandHandler("delchannel", del_channel))
+    app.add_handler(CommandHandler("channels", list_channels))
+    app.add_handler(CommandHandler("stats", stats_command))
+    
+    app.add_handler(CallbackQueryHandler(fsub_callback))
+    app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
+
+    print("Bot started without credits and with clean ad flow.")
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
