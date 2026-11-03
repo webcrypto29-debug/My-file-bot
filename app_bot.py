@@ -187,7 +187,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_response("🔒 **File Locked!**\n\n👇 Click below to watch a quick ad and unlock your file:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
 
-    await send_response("👋 Welcome to Veronica Bot!\n\nSend or click any file link to download content!")
+    await send_response("👋 Welcome to Veronica Bot!\n\nStart - Start the bot or receive requested files")
 
 async def send_requested_item_direct(context, user_id, session):
     item_id = session["id"]
@@ -244,7 +244,7 @@ async def send_requested_item_direct(context, user_id, session):
 async def my_files_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     
-    files = list(files_col.find().limit(10)) # Shows latest 10 files
+    files = list(files_col.find().limit(10))
     total_files = files_col.count_documents({})
     total_batches = batch_col.count_documents({})
 
@@ -258,7 +258,6 @@ async def my_files_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for f in files:
         f_id = f["_id"]
         f_type = f.get("item_type", "file")
-        caption = f.get("caption", f.get("text", "No Text"))[:20]
         keyboard.append([InlineKeyboardButton(f"🗑️ Delete: {f_id} ({f_type})", callback_data=f"del_file_{f_id}")])
     
     keyboard.append([InlineKeyboardButton("⚠️ Clear ALL Files from DB", callback_data="del_all_files")])
@@ -271,19 +270,42 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     if data.startswith("del_file_"):
         f_id = data.replace("del_file_", "")
-        files_col.delete_one({"_id": f_id})
+        res1 = files_col.delete_one({"_id": f_id})
+        res2 = batch_col.delete_one({"_id": f_id})
+        
         try:
-            await query.answer(f"✅ File {f_id} deleted successfully!", show_alert=True)
-            await query.message.edit_text(f"✅ फाइल `{f_id}` को सफलतापूर्वक डिलीट कर दिया गया है।", parse_mode="Markdown")
-        except Exception:
-            pass
+            if res1.deleted_count > 0 or res2.deleted_count > 0:
+                await query.answer(f"✅ File {f_id} deleted successfully!", show_alert=True)
+            else:
+                await query.answer(f"⚠️ File {f_id} already deleted or not found.", show_alert=True)
+            
+            files = list(files_col.find().limit(10))
+            total_files = files_col.count_documents({})
+            total_batches = batch_col.count_documents({})
+
+            if not files:
+                await query.message.edit_text("📂 डेटाबेस अब पूरी तरह खाली है। कोई फाइल नहीं बची।")
+                return
+
+            text = f"🗂 **Database File Manager**\n📊 Total Files: `{total_files}` | Batches: `{total_batches}`\n\nनीचे हाल की फाइल्स दी गई हैं:"
+            keyboard = []
+            for f in files:
+                fid = f["_id"]
+                ftype = f.get("item_type", "file")
+                keyboard.append([InlineKeyboardButton(f"🗑️ Delete: {fid} ({ftype})", callback_data=f"del_file_{fid}")])
+            
+            keyboard.append([InlineKeyboardButton("⚠️ Clear ALL Files from DB", callback_data="del_all_files")])
+            await query.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(keyboard))
+            
+        except Exception as e:
+            print(f"Delete callback error: {e}")
 
     elif data == "del_all_files":
         files_col.delete_many({})
         batch_col.delete_many({})
         try:
             await query.answer("🗑️ All files cleared from database!", show_alert=True)
-            await query.message.edit_text("🗑️ डेटाबेस की सभी फाइल्स और बैचेस को सफलतापूर्वक साफ़ (Clear) कर दिया गया है!")
+            await query.message.edit_text("🗑️ डेटाबेस की सभी फाइल्स और बैचेस को सफलतापूर्वक साफ़ कर दिया गया है!")
         except Exception:
             pass
             
@@ -303,20 +325,24 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             context.args = [param] if param not in ["NO_PARAM", "None"] else []
             await start(update, context)
 
-# ----------------- ADMIN COMMANDS -----------------
+# ----------------- ADMIN COMMANDS (WITH BROADCAST CONTROL) -----------------
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     text = (
         "🛠 **Admin Commands Guide:**\n\n"
-        "🔗 `/genlink` - Generate link\n"
-        "📦 `/batch` - Create file batch\n"
-        "🗂 `/myfiles` - Manage / Delete files\n"
-        "📢 `/sendad` - Broadcast message\n"
-        "➕ `/addchannel` - Add Force Sub\n"
-        "➖ `/delchannel` - Remove Force Sub\n"
-        "📑 `/channels` - List Force Sub channels\n"
-        "🔘 `/togglead` - Toggle ads\n"
-        "📊 `/stats` - View stats"
+        "start - Start the bot or receive requested files\n"
+        "stats - View total users and bot statistics\n"
+        "genlink - Reply to a file/message to generate a single link\n"
+        "sendad - Broadcast message with rich ads or buttons\n"
+        "stopbroadcast - Stop the ongoing broadcast process\n"
+        "deletebroadcast - Delete all broadcasted messages from users\n"
+        "batch - Toggle batch mode to create multi-file links\n"
+        "admin - Open admin panel and view help instructions\n"
+        "togglead - Enable or disable the watch-ad system\n"
+        "addchannel - Add a force-subscription channel\n"
+        "delchannel - Remove a force-subscription channel\n"
+        "channels - View list of all force-sub channels\n"
+        "myfiles - Manage and delete stored database files"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -397,17 +423,63 @@ async def send_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg:
         await update.message.reply_text("⚠️ Reply to a message to broadcast!")
         return
+
+    broadcast_control["is_running"] = True
     users = list(users_col.find())
+    total = len(users)
     success, failed = 0, 0
-    status_msg = await update.message.reply_text(f"🚀 Broadcasting to {len(users)} users...")
+    broadcast_id = str(int(time.time()))
+    sent_details = []
+
+    status_msg = await update.message.reply_text(f"🚀 Broadcast started to {total} users...")
+
     for u in users:
+        if not broadcast_control["is_running"]:
+            await update.message.reply_text("🛑 Broadcast stopped manually.")
+            break
+        u_id = u["_id"]
         try:
-            await msg.copy(chat_id=u["_id"])
+            sent = await msg.copy(chat_id=u_id)
+            sent_details.append({"user_id": u_id, "message_id": sent.message_id})
             success += 1
         except Exception:
             failed += 1
         await asyncio.sleep(0.05)
-    await status_msg.edit_text(f"✅ **Broadcast Completed!**\nSuccess: {success} | Failed: {failed}", parse_mode="Markdown")
+
+    if sent_details:
+        broadcast_history_col.insert_one({"_id": broadcast_id, "sent_details": sent_details})
+
+    broadcast_control["is_running"] = False
+    await status_msg.edit_text(f"✅ **Broadcast Completed!**\n🎯 Success: {success}\n❌ Failed: {failed}", parse_mode="Markdown")
+
+async def stop_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    if broadcast_control["is_running"]:
+        broadcast_control["is_running"] = False
+        await update.message.reply_text("🛑 Broadcast stop signal sent. It will halt shortly.")
+    else:
+        await update.message.reply_text("⚠️ No broadcast is currently running.")
+
+async def delete_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID: return
+    histories = list(broadcast_history_col.find())
+    if not histories:
+        await update.message.reply_text("📭 No broadcast history found to delete.")
+        return
+
+    status_msg = await update.message.reply_text("🗑️ Deleting broadcasted messages from users...")
+    deleted_total = 0
+
+    for h in histories:
+        for item in h.get("sent_details", []):
+            try:
+                await context.bot.delete_message(chat_id=item["user_id"], message_id=item["message_id"])
+                deleted_total += 1
+            except Exception:
+                pass
+        broadcast_history_col.delete_one({"_id": h["_id"]})
+
+    await status_msg.edit_text(f"✅ **Broadcast Deletion Completed!**\nDeleted {deleted_total} messages.")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
@@ -455,6 +527,8 @@ def main():
     app.add_handler(CommandHandler("batch", batch_command))
     app.add_handler(CommandHandler("myfiles", my_files_command))
     app.add_handler(CommandHandler("sendad", send_ad))
+    app.add_handler(CommandHandler("stopbroadcast", stop_broadcast))
+    app.add_handler(CommandHandler("deletebroadcast", delete_broadcast))
     app.add_handler(CommandHandler("addchannel", add_channel))
     app.add_handler(CommandHandler("delchannel", del_channel))
     app.add_handler(CommandHandler("channels", list_channels))
@@ -463,7 +537,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback_handler))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started with File Management & Ad flow.")
+    print("Bot started with full file delete fix & commands.")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
