@@ -47,13 +47,38 @@
         .btn:active { transform: scale(0.98); }
         .btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
         .btn-blue { background-color: #2563eb; }
-        .btn-green { background-color: #16a34a; }
+        .btn-green { background-color: #16a34a; margin-top: 10px; }
+        
+        /* Admin Bypass Button Style */
+        .btn-admin {
+            background-color: #7c3aed;
+            margin-top: 10px;
+            display: none; /* Hidden by default for normal users */
+        }
+
         .status { display: none; margin-top: 14px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.4; }
         .status.error { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
         .status.loading { background: rgba(59, 130, 246, 0.12); color: #93c5fd; }
         .small-note { margin-top: 14px; margin-bottom: 0; font-size: 12px; color: #64748b; }
+        
+        .ad-container {
+            margin: 15px 0;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 10px;
+        }
+        .ad-label {
+            font-size: 10px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
         #step2 { display: none; }
-        .success-box { background: rgba(22, 163, 74, 0.10); border: 1px solid rgba(22, 163, 74, 0.20); border-radius: 12px; padding: 12px; margin-bottom: 18px; }
+        .success-box { background: rgba(22, 163, 74, 0.10); border: 1px solid rgba(22, 163, 74, 0.20); border-radius: 12px; padding: 12px; margin-bottom: 14px; }
         .success-box strong { display: block; color: #86efac; font-size: 15px; margin-bottom: 4px; }
         .success-box span { color: #94a3b8; font-size: 13px; }
     </style>
@@ -68,9 +93,16 @@
             Watch the short ad completely to unlock your file.<br><br>
             <b>No subscription or payment required.</b>
         </p>
+        
         <button class="btn btn-blue" id="watchAdBtn" onclick="watchAd()">
             🎬 Watch Ad to Unlock
         </button>
+
+        <!-- ADMIN BYPASS BUTTON (Visible ONLY to Admin ID: 5911965767) -->
+        <button class="btn btn-admin" id="adminBypassBtn" onclick="adminBypass()">
+            🛠️ Admin Test Bypass (No Ad)
+        </button>
+
         <div class="status loading" id="loadingStatus">⏳ Loading advertisement...</div>
         <div class="status error" id="errorStatus"></div>
         <p class="small-note">Please watch the ad completely to continue.</p>
@@ -84,16 +116,41 @@
             <strong>✅ Ad Completed Successfully</strong>
             <span>Your file is ready in Telegram.</span>
         </div>
-        <p>Tap the button below to get your file.</p>
+
+        <!-- Banner Ad Slot -->
+        <div class="ad-container">
+            <span class="ad-label">📢 Sponsored Advertisement</span>
+            <div style="font-size: 12px; color: #94a3b8; padding: 10px;">[ Banner Ad Space ]</div>
+        </div>
+
+        <p>Tap the green button below to get your file instantly:</p>
+        
         <button class="btn btn-green" onclick="getFiles()">
-            📥 Get Files
+            📥 Get Files Now
         </button>
     </div>
 
     <script>
+        const ADMIN_TELEGRAM_ID = 5911965767; // Your Admin ID
+
         const tg = window.Telegram ? window.Telegram.WebApp : null;
         if (tg) {
-            try { tg.ready(); tg.expand(); } catch (error) { console.log(error); }
+            try { 
+                tg.ready(); 
+                tg.expand(); 
+
+                // Check if the current logged-in user is the Admin
+                if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
+                    const currentUserId = tg.initDataUnsafe.user.id;
+                    if (currentUserId === ADMIN_TELEGRAM_ID) {
+                        // Show Admin Bypass Button
+                        document.getElementById("adminBypassBtn").style.display = "flex";
+                        console.log("Admin mode active: Bypass button enabled.");
+                    }
+                }
+            } catch (error) { 
+                console.log("Telegram WebApp init error:", error); 
+            }
         }
 
         const step1 = document.getElementById("step1");
@@ -127,6 +184,7 @@
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
+        // Normal User Ad Watch Flow
         async function watchAd() {
             errorStatus.style.display = "none";
             if (typeof window.show_11452552 !== "function") {
@@ -143,6 +201,12 @@
                 console.error("Ad error:", error);
                 showError("⚠️ The ad was not completed. Please watch the full ad and try again.");
             }
+        }
+
+        // Admin Secret Bypass Function (Skips Monetag Ad for you)
+        function adminBypass() {
+            console.log("Admin bypass triggered.");
+            showStep2();
         }
 
         function getFiles() {
