@@ -58,7 +58,31 @@
         .btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
         .btn-blue { background-color: #2563eb; }
         .btn-green { background-color: #16a34a; margin-top: 10px; }
-        .btn-admin { background-color: #7c3aed; margin-top: 10px; display: none; }
+        
+        /* Admin Testing Panel Styles */
+        .admin-panel {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(124, 58, 237, 0.1);
+            border: 1px dashed rgba(124, 58, 237, 0.4);
+            border-radius: 12px;
+            display: none; /* Hidden by default, shown only for Admin ID */
+        }
+        .admin-title {
+            font-size: 11px;
+            color: #a78bfa;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            display: block;
+        }
+        .btn-admin-test {
+            background-color: #7c3aed;
+            font-size: 13px;
+            padding: 9px 12px;
+            margin-top: 6px;
+        }
 
         .status { display: none; margin-top: 12px; padding: 8px 10px; border-radius: 8px; font-size: 12px; line-height: 1.4; }
         .status.error { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
@@ -110,10 +134,13 @@
             🎬 Watch Ads to Unlock
         </button>
 
-        <!-- ADMIN BYPASS BUTTON -->
-        <button class="btn btn-admin" id="adminBypassBtn" onclick="adminBypass()">
-            🛠️ Admin Test Bypass (No Ads)
-        </button>
+        <!-- ADMIN INDIVIDUAL TESTING PANEL (Visible ONLY to Admin ID: 5911965767) -->
+        <div class="admin-panel" id="adminPanel">
+            <span class="admin-title">🛠️ Admin Quick Testing Panel</span>
+            <button class="btn btn-admin-test" onclick="testAd1()">🎬 Test Ad 1 (Monetag Only)</button>
+            <button class="btn btn-admin-test" onclick="testAd2()">📢 Test Ad 2 (RichAds Only)</button>
+            <button class="btn btn-admin-test" style="background-color: #059669;" onclick="adminBypass()">⚡ Instant Bypass (No Ads)</button>
+        </div>
 
         <div class="status loading" id="loadingStatus">⏳ Loading advertisement...</div>
         <div class="status error" id="errorStatus"></div>
@@ -154,7 +181,7 @@
                 tg.expand(); 
                 if (tg.initDataUnsafe && tg.initDataUnsafe.user) {
                     if (tg.initDataUnsafe.user.id === ADMIN_TELEGRAM_ID) {
-                        document.getElementById("adminBypassBtn").style.display = "flex";
+                        document.getElementById("adminPanel").style.display = "block";
                     }
                 }
             } catch (error) { console.log(error); }
@@ -191,12 +218,12 @@
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
-        // --- AD SEQUENCE (Monetag + RichAds Controller) ---
+        // --- NORMAL FULL AD SEQUENCE FOR USERS ---
         async function startAdSequence() {
             errorStatus.style.display = "none";
             
             try {
-                // Ad 1: Monetag Rewarded Ad
+                // Step 1: Monetag Ad
                 if (typeof window.show_11452552 === "function") {
                     showLoading("⏳ Loading Ad 1 of 2...");
                     await window.show_11452552();
@@ -204,13 +231,15 @@
                     await new Promise(resolve => setTimeout(resolve, 1000));
                 }
 
-                // Ad 2: RichAds Trigger / Fallback
+                await new Promise(resolve => setTimeout(resolve, 800));
+
+                // Step 2: RichAds Ad
                 showLoading("⏳ Loading Ad 2 of 2...");
                 if (window.TelegramAdsController && typeof window.TelegramAdsController.show === "function") {
                     try {
                         await window.TelegramAdsController.show();
                     } catch (err) {
-                        console.log("RichAds show error:", err);
+                        console.log("RichAds notice:", err);
                     }
                 } else {
                     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -222,6 +251,41 @@
                 console.error("Ad sequence error:", error);
                 hideLoading();
                 showStep2();
+            }
+        }
+
+        // --- ADMIN INDIVIDUAL TESTING FUNCTIONS ---
+        async function testAd1() {
+            errorStatus.style.display = "none";
+            try {
+                if (typeof window.show_11452552 === "function") {
+                    showLoading("⏳ Testing Monetag Ad...");
+                    await window.show_11452552();
+                    hideLoading();
+                    alert("✅ Monetag Ad Test Completed Successfully!");
+                } else {
+                    showError("⚠️ Monetag SDK not loaded yet.");
+                }
+            } catch (e) {
+                hideLoading();
+                showError("⚠️ Monetag Test Error.");
+            }
+        }
+
+        async function testAd2() {
+            errorStatus.style.display = "none";
+            try {
+                showLoading("⏳ Testing RichAds...");
+                if (window.TelegramAdsController && typeof window.TelegramAdsController.show === "function") {
+                    await window.TelegramAdsController.show();
+                } else {
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+                hideLoading();
+                alert("✅ RichAds Test Completed Successfully!");
+            } catch (e) {
+                hideLoading();
+                showError("⚠️ RichAds Test Error.");
             }
         }
 
