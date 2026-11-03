@@ -11,6 +11,9 @@
     <!-- Monetag Rewarded SDK -->
     <script src="https://libtl.com/sdk.js" data-zone="11452552" data-sdk="show_11452552"></script>
 
+    <!-- OnClick / ClickAdilla TMA SDK -->
+    <script src="https://js.onclckvd.com/in-stream-ad-admanager/tma.js"></script>
+
     <style>
         * { box-sizing: border-box; }
         body {
@@ -55,20 +58,21 @@
         .status.loading { background: rgba(59, 130, 246, 0.12); color: #93c5fd; }
         .small-note { margin-top: 12px; margin-bottom: 0; font-size: 11px; color: #64748b; }
         
-        /* Ad Banner Container */
+        /* Clear Ad Container Design to prevent confusion */
         .ad-container {
             margin: 12px 0;
-            padding: 6px;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px dashed rgba(255, 255, 255, 0.15);
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px dashed rgba(239, 68, 68, 0.3); /* Slightly reddish dashed border to indicate sponsored */
             border-radius: 10px;
         }
         .ad-label {
-            font-size: 9px;
-            color: #64748b;
+            font-size: 10px;
+            color: #f87171; /* Warning/Notice color for Ad label */
             text-transform: uppercase;
             letter-spacing: 1px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            font-weight: 700;
             display: block;
         }
 
@@ -82,9 +86,9 @@
 
     <!-- STEP 1 -->
     <div class="card" id="step1">
-        <!-- A-ADS Banner at the Top/First Page -->
+        <!-- A-ADS Banner at the Top with clear label -->
         <div class="ad-container">
-            <span class="ad-label">📢 Advertisement</span>
+            <span class="ad-label">📢 Sponsored Ad (Do Not Click)</span>
             <div id="frame" style="width: 100%; margin: auto; position: relative; z-index: 99998;">
                 <iframe data-aa='2451775' src='//acceptable.a-ads.com/2451775/?size=Adaptive' style='border:0; padding:0; width:100%; height:auto; overflow:hidden; display: block; margin: auto'></iframe>
             </div>
@@ -120,9 +124,9 @@
             <span>Your file is ready in Telegram.</span>
         </div>
 
-        <!-- Second Banner Ad Slot with Clear Label -->
+        <!-- Second Banner Ad Slot with prominent Sponsored Label so users won't get confused -->
         <div class="ad-container">
-            <span class="ad-label">📢 Sponsored Advertisement</span>
+            <span class="ad-label">📢 Advertisement Banner</span>
             <ins style="width: 100%; max-width: 300px; height:250px; display:inline-block;" data-width="300" data-height="250" class="a3f7bcb2c16" data-domain="//data527.click" data-affquery="/4c9e2d1775e6a431e226/3f7bcb2c16/?placementName=default"></ins>
             <script src="//data527.click/js/responsive.js" async></script>
         </div>
@@ -138,6 +142,12 @@
         const ADMIN_TELEGRAM_ID = 5911965767; // Your Admin ID
         const ADSTERRA_DIRECT_LINK = "https://auctionr.org/4/81e58572ed11dd7da6900d72d9e31f6d";
         const BOT_FINAL_URL = "https://t.me/MyFile727_bot?start=VERIFY_AD";
+
+        // Initialize OnClick TMA Ad Engine
+        let onClickShowAd = null;
+        window.initCdTma?.({ id: '2451775' }).then(show => { // Replace '2451775' with your actual OnClick Spot ID if different
+            onClickShowAd = show;
+        }).catch(e => console.log("OnClick TMA Init Error:", e));
 
         const tg = window.Telegram ? window.Telegram.WebApp : null;
         if (tg) {
@@ -183,7 +193,7 @@
             window.scrollTo({ top: 0, behavior: "smooth" });
         }
 
-        // --- DOUBLE AD SEQUENCE (Monetag Ad 1 + Ad 2) ---
+        // --- DOUBLE AD SEQUENCE (Monetag Ad 1 + OnClick TMA Ad 2) ---
         async function startAdSequence() {
             errorStatus.style.display = "none";
             if (typeof window.show_11452552 !== "function") {
@@ -192,13 +202,18 @@
             }
 
             try {
-                // Ad 1: Monetag
+                // Ad 1: Monetag Rewarded Ad
                 showLoading("⏳ Loading Ad 1 of 2...");
                 await window.show_11452552();
 
-                // Ad 2: Second Ad (Simulated / or second network call if available, e.g. 3-sec delay or second script)
-                showLoading("⏳ Loading Ad 2 of 2 (Almost done)...");
-                await new Promise(resolve => setTimeout(resolve, 3000)); // Small pause/buffer for 2nd ad duration
+                // Ad 2: OnClick TMA Ad
+                showLoading("⏳ Loading Ad 2 of 2...");
+                if (typeof onClickShowAd === "function") {
+                    await onClickShowAd();
+                } else {
+                    // Fallback small delay if onclick engine is still warming up
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                }
 
                 hideLoading();
                 showStep2();
@@ -215,15 +230,12 @@
 
         // --- SMART ADSTERRA DIRECT LINK & BOT REDIRECT LOGIC ---
         function handleGetFileClick() {
-            // Check if user has already clicked the direct link in this session
             const hasSeenDirectLink = sessionStorage.getItem("adsterra_clicked");
 
             if (!hasSeenDirectLink) {
-                // First time click: Open Adsterra Direct Link in a new tab/window, mark as seen
                 sessionStorage.setItem("adsterra_clicked", "true");
                 window.open(ADSTERRA_DIRECT_LINK, "_blank");
             } else {
-                // Second time click onwards: Directly send them to the Telegram Bot to get the file!
                 const botUrl = BOT_FINAL_URL;
                 if (tg && typeof tg.openTelegramLink === "function") {
                     try {
