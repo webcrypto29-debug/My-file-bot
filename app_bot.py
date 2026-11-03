@@ -83,7 +83,6 @@ def get_current_earn_link():
             return st.get("link")
     except Exception:
         pass
-    # Default initial earning/referral link
     return "https://t.me/MailTaskProBot?start=5911965767"
 
 async def delete_message_after_delay(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, delay: int):
@@ -209,9 +208,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await send_response("🔒 **File Locked!**\n\n👇 Click below to watch a quick ad and unlock your file:", reply_markup=InlineKeyboardMarkup(keyboard))
             return
 
-    earn_link = get_current_earn_link()
-    keyboard = [[InlineKeyboardButton("🔥 Earn Extra Money / Tasks", url=earn_link)]]
-    await send_response("👋 Welcome to Veronica Bot!\n\nSend your file link to download files safely.", reply_markup=InlineKeyboardMarkup(keyboard))
+    # Clean Welcome Message (No unnecessary earning buttons at the start)
+    await send_response("👋 **Welcome to Veronica Bot!**\n\nSend your file link or open a valid file link to download content safely.")
 
 async def send_requested_item_direct(context, user_id, session):
     item_id = session["id"]
@@ -262,7 +260,7 @@ async def send_requested_item_direct(context, user_id, session):
                             asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
                         await asyncio.sleep(0.5)
 
-        # Post-download Dynamic Earning / Referral Hub Button
+        # --- EXACTLY HERE: Right after the file is successfully delivered ---
         current_earn_link = get_current_earn_link()
         earn_keyboard = [[InlineKeyboardButton("🔥 Complete Tasks & Earn Extra Money", url=current_earn_link)]]
         await context.bot.send_message(
@@ -586,7 +584,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback_handler))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started with Ads Galaxy integration & dynamic earn link support.")
+    print("Bot started with correct post-file earning link position.")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
