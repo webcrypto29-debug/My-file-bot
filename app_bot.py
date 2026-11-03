@@ -3,7 +3,6 @@ import time
 import asyncio
 import threading
 import uuid
-import requests
 import pymongo
 import dns.resolver
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -52,8 +51,8 @@ WARNING_TEXT = (
     "𝗧𝗼 𝗔𝘃𝗼𝗶𝗱 𝗖𝗼𝗽𝘆𝗿𝗶𝗴𝗵𝘁 𝗶𝘀𝘀𝘂𝗲𝘀"
 )
 DELETE_TIME_SECONDS = 1800  # 30 Minutes * 60 Seconds
-# ----------------- DATABASE SETUP -----------------
 
+# ----------------- DATABASE SETUP -----------------
 mongo_client = pymongo.MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
 db = mongo_client["FileBotDB"]
 files_col = db["files"]
@@ -124,17 +123,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user_id = user.id
 
-    # ----------------- ADS GALAXY INTEGRATION -----------------
+    # Register user in DB for broadcasts/stats (without credits)
     try:
-        await asyncio.to_thread(
-            requests.get,
-            "https://app.adsgalaxy.online/api/bot/integration/235/sysbraLOEEQ6ocZK8-yIK9YtHvcJRsLL366eNluVp-Y",
-            params={"user_id": user_id},
-            timeout=3
-        )
+        user_doc = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
+        if not user_doc:
+            await asyncio.to_thread(users_col.insert_one, {"_id": user_id})
     except Exception as e:
-        print(f"Ads Galaxy Ping Error: {e}")
-    # -----------------------------------------------------------
+        print(f"User DB Registration Error: {e}")
     
     is_callback = update.callback_query is not None
     if is_callback:
@@ -158,18 +153,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args if hasattr(context, "args") and context.args else []
 
-    # Database User Registration
-    try:
-        user_doc = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
-        if not user_doc:
-            await asyncio.to_thread(users_col.insert_one, {"_id": user_id, "credits": 0})
-            current_credits = 0
-        else:
-            current_credits = user_doc.get("credits", 0)
-    except Exception as e:
-        print(f"User DB Registration Error: {e}")
-        current_credits = 0
-
     # 1. FORCE SUB VERIFICATION
     unjoined = await check_force_sub(context.bot, user_id)
     if unjoined:
@@ -185,46 +168,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await send_response(msg_text, reply_markup=InlineKeyboardMarkup(keyboard))
         return
 
-    # 2. AD VERIFICATION LOGIC
+    # 2. AD VERIFICATION LOGIC (Every click requires ad watch)
     if args and len(args) > 0 and args[0] == "VERIFY_AD":
         user_session = await asyncio.to_thread(sessions_col.find_one, {"_id": user_id})
         
         if not user_session:
-            await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": 3}}, True)
-            updated_user = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
-            new_bal = updated_user.get("credits", 0) if updated_user else 3
-            await send_response(
-                f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_bal} Credits**"
-            )
+            await send_response("⚠️ No active file session found. Please open your share link again.")
             return
 
         if user_session.get("verified", False):
-            await send_response("⚠️ This ad session is already used. Please open a new share link.")
+            await send_response("⚠️ This verification session is already used. Please open your file link again.")
             return
 
         click_time = user_session.get("click_time", 0)
         if time.time() - click_time < 3:
-            await send_response(
-                "⚠️ **Verification Failed!**\n\nThe ad was not watched completely. Please try again."
-            )
+            await send_response("⚠️ **Verification Failed!**\n\nThe ad was not watched completely. Please try again.")
             return
 
+        # Mark session as verified
         await asyncio.to_thread(sessions_col.update_one, {"_id": user_id}, {"$set": {"verified": True}})
-        await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": 3}}, True)
-        updated_user = await asyncio.to_thread(users_col.find_one, {"_id": user_id})
-        new_balance = updated_user.get("credits", 0) if updated_user else 3
 
-        await send_response(
-            f"🎉 **Ad Completed Successfully!**\n🎁 **+3 Credits** added to your account.\n💰 Total Balance: **{new_balance} Credits**"
-        )
-
-        if new_balance >= 1:
-            await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": -1}})
-            await send_requested_item_direct(context, user_id, user_session, deduct_credit=True)
+        await send_response("🎉 **Ad Completed Successfully!**\n\n📥 Delivering your file now...")
+        await send_requested_item_direct(context, user_id, user_session)
         return
 
     # 3. FILE / BATCH DOWNLOAD REQUEST
-    if args and len(args) > 0 and args[0] not in ["NO_PARAM", "None"]:
+    if args and len(args) > 0 and args[0] not in ["NO_PARAM", "None", "VERIFY_AD"]:
         param = args[0]
         file_doc = await asyncio.to_thread(files_col.find_one, {"_id": param})
         batch_doc = await asyncio.to_thread(batch_col.find_one, {"_id": param})
@@ -240,33 +209,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.to_thread(sessions_col.update_one, {"_id": user_id}, {"$set": session_info}, True)
 
             if not get_ad_status():
-                await send_requested_item_direct(context, user_id, session_info, deduct_credit=False)
+                await send_requested_item_direct(context, user_id, session_info)
                 return
 
-            if current_credits >= 1:
-                await asyncio.to_thread(users_col.update_one, {"_id": user_id}, {"$inc": {"credits": -1}})
-                await send_requested_item_direct(context, user_id, session_info, deduct_credit=True)
-                return
-
+            # Always require watching an ad per click
             keyboard = [[InlineKeyboardButton("Watch Ad Now 🚀", web_app=WebAppInfo(url=MINI_APP_URL))]]
             await send_response(
-                f"🔒 **File Locked!**\n\n💰 Your Credits: **{current_credits}**\n\n👇 Click below to watch an ad, earn **+3 Credits** and unlock your file!",
+                "🔒 **File Locked!**\n\n👇 Click below to watch a quick ad and unlock your file instantly:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
             return
 
     # 4. DEFAULT START RESPONSE
     await send_response(
-        f"👋 Welcome to Veronica Bot!\n\n💰 Your Current Balance: **{current_credits} Credits**\n\nSend or click any link to download content!"
+        f"👋 Welcome to Veronica Bot!\n\nSend or click any file link to download content!"
     )
 
 # ----------------- DIRECT FILE DELIVERY (WITH AUTO-DELETE) -----------------
-async def send_requested_item_direct(context, user_id, session, deduct_credit=True):
+async def send_requested_item_direct(context, user_id, session):
     item_id = session["id"]
     item_type = session["type"]
-
-    if deduct_credit:
-        await context.bot.send_message(chat_id=user_id, text="⚡ **1 Credit Deducted.** Delivering content...", parse_mode="Markdown")
 
     try:
         if item_type == "single":
@@ -317,8 +279,6 @@ async def send_requested_item_direct(context, user_id, session, deduct_credit=Tr
 
     except Exception as e:
         await context.bot.send_message(chat_id=user_id, text=f"❌ Error delivering content: {str(e)}")
-
-    await asyncio.to_thread(sessions_col.delete_one, {"_id": user_id})
 
 # ----------------- CALLBACK QUERY HANDLER -----------------
 async def fsub_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -621,7 +581,7 @@ def main():
     app.add_handler(CallbackQueryHandler(fsub_callback))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started with auto-delete and warning caption support.")
+    print("Bot started without credits and with clean ad flow.")
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
