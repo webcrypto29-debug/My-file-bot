@@ -364,7 +364,7 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             context.args = [param] if param not in ["NO_PARAM", "None"] else []
             await start(update, context)
 
-# ----------------- ADMIN COMMANDS (WITH BROADCAST & EARN LINK CONTROL) -----------------
+# ----------------- ADMIN COMMANDS -----------------
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     current_link = get_current_earn_link()
@@ -562,18 +562,15 @@ async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     raw_input = args[0].strip()
     
-    # Check if input is a chat ID (number) or username
     if raw_input.replace("-", "").isdigit():
         target_id = int(raw_input)
         res = channels_col.delete_one({"_id": target_id})
     else:
-        # It's a username or link, let's fetch the chat object to get its exact ID
         target = "@" + raw_input.split("t.me/")[-1].replace("+", "").replace("/", "").replace("@", "")
         try:
             chat = await context.bot.get_chat(target)
             res = channels_col.delete_one({"_id": chat.id})
-        except Exception as e:
-            # Fallback: try deleting by matching username string if stored
+        except Exception:
             res = channels_col.delete_one({"_id": target})
 
     if res.deleted_count > 0:
@@ -612,7 +609,8 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback_handler))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started successfully with fixed channel delete command.")
+    print("Bot started successfully with complete code.")
     app.run_polling(drop_pending_updates=True)
 
-if __name_
+if __name__ == "__main__":
+    main()
