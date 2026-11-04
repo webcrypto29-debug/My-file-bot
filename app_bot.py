@@ -212,7 +212,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    # Clean, Catchy Welcome Message for direct bot open (No clutter)
     await send_response(
         "👋 **Welcome to Veronica Bot!**\n\n"
         "✨ Send or open a valid file link to download your favorite movies and content safely.",
@@ -268,7 +267,7 @@ async def send_requested_item_direct(context, user_id, session):
                             asyncio.create_task(delete_message_after_delay(context, user_id, sent_msg.message_id, DELETE_TIME_SECONDS))
                         await asyncio.sleep(0.5)
 
-        # --- EXACTLY HERE: Right after the file is successfully delivered ---
+        # --- RIGHT AFTER FILE DELIVERY: Extra Earning / Passive Income Button ---
         current_earn_link = get_current_earn_link()
         earn_keyboard = [[InlineKeyboardButton("🔥 Earn Extra Money / Passive Income", url=current_earn_link)]]
         await context.bot.send_message(
@@ -380,8 +379,8 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"batch - Toggle batch mode to create multi-file links\n"
         f"admin - Open admin panel and view help instructions\n"
         f"togglead - Enable or disable the watch-ad system\n"
-        f"addchannel - Add a force-subscription channel\n"
-        f"delchannel - Remove a force-subscription channel\n"
+        f"addchannel - Add a force-subscription channel (`/addchannel @channel`)\n"
+        f"delchannel - Remove a force-subscription channel (`/delchannel @channel` or ID)\n"
         f"channels - View list of all force-sub channels\n"
         f"myfiles - Manage and delete stored database files\n"
         f"setearnlink - Change earning/referral link (`/setearnlink <new_link>`)\n\n"
@@ -543,7 +542,7 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
     if not args:
-        await update.message.reply_text("⚠️ `/addchannel @channel`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Use: `/addchannel @channel`", parse_mode="Markdown")
         return
     raw = args[0].strip()
     target = "@" + raw.split("t.me/")[-1].replace("+", "").replace("/", "") if "t.me/" in raw else (int(raw) if raw.replace("-", "").isdigit() else raw)
@@ -557,17 +556,38 @@ async def add_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def del_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     args = context.args
-    if not args: return
-    channels_col.delete_many({"$or": [{"_id": int(args[0]) if args[0].isdigit() else 0}, {"username": args[0].replace("@", "").lower()}]})
-    await update.message.reply_text("✅ Channel removed.")
+    if not args:
+        await update.message.reply_text("⚠️ Use: `/delchannel @channel` or Channel ID", parse_mode="Markdown")
+        return
+    
+    raw_input = args[0].strip()
+    
+    # Check if input is a chat ID (number) or username
+    if raw_input.replace("-", "").isdigit():
+        target_id = int(raw_input)
+        res = channels_col.delete_one({"_id": target_id})
+    else:
+        # It's a username or link, let's fetch the chat object to get its exact ID
+        target = "@" + raw_input.split("t.me/")[-1].replace("+", "").replace("/", "").replace("@", "")
+        try:
+            chat = await context.bot.get_chat(target)
+            res = channels_col.delete_one({"_id": chat.id})
+        except Exception as e:
+            # Fallback: try deleting by matching username string if stored
+            res = channels_col.delete_one({"_id": target})
+
+    if res.deleted_count > 0:
+        await update.message.reply_text(f"✅ Channel `{raw_input}` removed successfully from Force-Sub!")
+    else:
+        await update.message.reply_text(f"⚠️ Channel `{raw_input}` not found in database. Check `/channels` for correct list.")
 
 async def list_channels(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID: return
     chs = list(channels_col.find())
     if not chs:
-        await update.message.reply_text("📑 No channels found.")
+        await update.message.reply_text("📑 No force-sub channels found.")
         return
-    text = "📢 **Channels:**\n" + "\n".join([f"• {c.get('title')} (`{c['_id']}`)" for c in chs])
+    text = "📢 **Active Force-Sub Channels:**\n" + "\n".join([f"• {c.get('title')} (`{c['_id']}`)" for c in chs])
     await update.message.reply_text(text, parse_mode="Markdown")
 
 # ----------------- MAIN -----------------
@@ -592,8 +612,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin_callback_handler))
     app.add_handler(MessageHandler(filters.ALL & (~filters.COMMAND), handle_admin_messages))
 
-    print("Bot started successfully with correct message flow.")
+    print("Bot started successfully with fixed channel delete command.")
     app.run_polling(drop_pending_updates=True)
 
-if __name__ == "__main__":
-    main()
+if __name_
